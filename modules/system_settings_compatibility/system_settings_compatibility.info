@@ -1,0 +1,6 @@
+; $Id$
+name = System Settings Compatibility
+description = Helper module to provide integration support for exiting Drupal versions.
+dependencies[] = System Settings
+package = System Settings
+core = 6.x

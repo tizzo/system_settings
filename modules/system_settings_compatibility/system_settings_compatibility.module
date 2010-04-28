@@ -1,0 +1,94 @@
+<?php
+// $Id$
+
+/**
+ * @file
+ *   system_settings_compatibility is a helper module for system_settings 
+ *   providing  helper functions for backward compatibility with Drupal 6
+ *   and Drupal 7.
+ */
+
+/**
+ * Implementation of hook_system_settings().
+ *
+ * Provides legacy support for Drupal variables from the variables table.
+ */
+function system_settings_compatibility_system_settings() {
+  global $conf;
+  $settings = array();
+  foreach ($conf as $name => $value) {
+    $settings[$name] = array(
+      'value' => $value,
+      'modules' => array('system'),
+      'groups' => array('variables'),
+      'entities' => array(
+        array(
+          'entity' => 'node',
+          'entity_type' => 'type',
+          'entity_identifier' => 'article',
+        ),
+      ),
+    );
+  }
+  return $settings;
+}
+
+/**
+ * Implementation of hook_system_settings_pre_set().
+ *
+ * If no modules are currently associated with this, 
+ * associate the module calling variable_set.
+ *
+ * Note: This function is intended to work with a
+ * patch to Drupal core for use system_settings 
+ * to power variable_set.
+ */
+function system_settings_compatibility_system_settings_pre_set($name, &$value, &$config, $system_settings) {
+  if (!isset($config['modules'])) {
+    $calling_module = system_settings_compatibility_detect_calling_module();
+    $config['modules'] = array(
+      'requires' => TRUE,
+    );
+  }
+}
+
+/**
+ * Finds the calling module so that it can be properly added to the meta 
+ * data for this configuration using debug_backtrace.  This is a hacky 
+ * stop-gap solution.  It may not be slow and not perfectly reliable but
+ * it's all we can do without rewriting all variable_set calls.
+ *
+ * This function relies entirely on the modulename_functioname and 
+ * basemodulename_extenstion_fuctionname naming conventions used commonly in
+ * Drupal core and contrib.  If this is not followed this will not work properly 
+ * but should not break anything important :-).
+ *
+ * @return
+ *   The name of the calling module.
+ *
+ */
+function system_settings_compatibility_detect_calling_module() {
+  // Get the backtrace of functions called to reach this one.
+  $history = debug_backtrace();
+  // Find the calling function.
+  $function = $history[5]['function'];
+  // Split the calling function into parts.
+  $function_parts = explode('_', $function);
+  $module_name = array_shift($function_parts);
+  (module_exists($module_name) ? $existing_module = $module_name : $existing_module = '');
+  foreach ($function_parts as $part) {
+    // If we have already found an existing module and the name we are
+    // checking for does not exist, we have gone too far.  Return the last existing module.
+    if ($existing_module != '' && !module_exists($module_name)) {
+      return $existing_module;
+    }
+    // If we have not, add the next part to the function name and check for its existence.
+    else {
+      $module_name .= '_' . $part;
+      if (module_exists($module_name)) {
+        $existing_module = $module_name;
+      }
+    }
+  }
+}
+

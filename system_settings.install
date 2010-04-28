@@ -1,0 +1,248 @@
+<?php
+// $Id$
+
+/**
+ * @file
+ *   Installs the necessary tables for the default storage mechanism of the system_settings_api.
+ */
+
+/**
+ * Implementation of hook_schema().
+ */
+function system_settings_schema() {
+  $schema['system_settings'] = array(
+    'description' => t('A replacement for the variables table, stores all system settings in one central location.'),
+    'fields' => array(
+      'name' => array(
+        'description' => t('The unique name of this setting within it\'s package.'),
+        'type' => 'varchar',
+        'length' => 128,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'value' => array(
+        'description' => t('The serialized value of this setting.'),
+        'type' => 'text',
+        'not null' => TRUE,
+        'size' => 'big',
+      ),
+      'always_load' => array(
+        'description' => t('The frequency with which to load this variable.  (Each pageload, upon request, etc.)'),
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => TRUE,
+      ),
+    ),
+    'indexes' => array(
+      'setting_name'        => array(array('name', 4)),
+    ),
+    'primary key' => array(
+      'name',
+    ),
+  );
+  $schema['system_settings_defaults_hashes'] = array(
+    'description' => t('This table stores information related to whether a system_setting has been updated in code.  If it has, notify any modules registed to detect changes.'),
+    'fields' => array(
+      'name' => array(
+        'description' => t('The unique name of this setting within it\'s package.'),
+        'type' => 'varchar',
+        'length' => 128,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'hash' => array(
+        'description' => t('A hash of the system_setting array.  Registered modules will be notified of changes in the event that something differs.'),
+        'type' => 'text',
+        'not null' => TRUE,
+        'size' => 'big',
+      ),
+    ),
+    'primary key' => array(
+      'name',
+    ),
+  );
+  $schema['system_settings_log'] = array(
+    'description' => t('Log all settings changes to provide documentation and rollback capabilities'),
+    'fields' => array(
+      'id' => array(
+        'description' => t('The auto-incrementing primary key of this table'),
+        'type' => 'serial',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'uid' => array(
+        'description' => 'The {users}.uid that made this configuration change.',
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0
+      ),
+      'old_value' => array(
+        'description' => t('The value that is being replaced.'),
+        'type' => 'text',
+        'not null' => TRUE,
+        'size' => 'big',
+      ),
+      'new_value' => array(
+        'description' => t('The value new value that is being stored.'),
+        'type' => 'text',
+        'not null' => TRUE,
+        'size' => 'big',
+      ),
+      'description' => array(
+        'description' => t('A helpful log message.'),
+        'type' => 'text',
+        'length' => 255,
+        'not null' => TRUE,
+      ),
+      'timestamp' => array(
+        'description' => 'The Unix timestamp when the setting was created or modified.',
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+    ),
+    'indexes' => array(
+      'id' => array('id'),
+      'timestamp' => array('timestamp'),
+    ),
+    'primary key' => array(
+      'id',
+    ),
+  );
+  $schema['system_settings_modules'] = array(
+    'description' => t(''),
+    'fields' => array(
+      'name' => array(
+        'description' => t('The unique name of this setting within it\'s package.'),
+        'type' => 'varchar',
+        'length' => 128,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'module' => array(
+        'description' => t('The module or theme related to a setting.'),
+        'type' => 'varchar',
+        'length' => 128,
+        'not null' => FALSE,
+      ),
+      'requires' => array(
+        'description' => t('The module or theme related to a setting.'),
+        'type' => 'int',
+        'size' => 'tiny',
+        'default' => 0,
+      ),
+      'required_by' => array(
+        'description' => t('The module or theme related to a setting.'),
+        'type' => 'int',
+        'size' => 'tiny',
+        'default' => 0,
+      ),
+      'callback' => array(
+        'description' => t('A callback to be called when this setting is modified.'),
+        'type' => 'text',
+        'length' => 255,
+        'not null' => FALSE,
+        'deafult' => '',
+      ),
+    ),
+    'primary key' => array('name', 'module'),
+  );
+  $schema['system_settings_groups'] = array(
+    'description' => t('Allows system settings to be grouped to allow them to be easily set and retrieved.'),
+    'fields' => array(
+      'name' => array(
+        'description' => t('The system setting associated with a group to allow ease of storing and loading settings.'),
+        'type' => 'varchar',
+        'length' => 128,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'setting_group' => array(
+        'description' => t('The name of the group this node is associated with.'),
+        'type' => 'varchar',
+        'length' => 128,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'parent' => array(
+        'description' => t('The parent group of this group (if applicable).'),
+        'type' => 'varchar',
+        'length' => 128,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+    ),
+    'unique keys' => array(
+      'group_setting' => array('name', 'settings_group'),
+     ),
+    'primary key' => array('name', 'settings_group'),
+    'indexes' => array(
+      'group_name' => array(array('name', 4)),
+    ),
+  );
+  $schema['system_settings_entities'] = array(
+    'description' => t('Allows system settingsto be associated with related entities'),
+    'fields' => array(
+      'name' => array(
+        'description' => t('The system setting associated with an entity.'),
+        'type' => 'varchar',
+        'length' => 128,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'entity' => array(
+        'type' => 'text',
+        'length' => 128,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'entity_type' => array(
+        'type' => 'text',
+        'length' => 128,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'entity_identifier' => array(
+        'type' => 'text',
+        'length' => 128,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'requires' => array(
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'required_by' => array(
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+    ),
+    'indexes' => array(
+      'entity_name' => array(array('name', 4)),
+      'entity' => array(array('entity', 4)),
+      'entity_type_id' => array(
+        array('entity', 4),
+        array('entity_type', 4),
+        array('entity_identifier', 4)
+      ),
+    ),
+    'primary_key' => array('name'),
+  );
+  return $schema;
+}
+
+/**
+ * Implementation of hook_install().
+ */
+function system_settings_install() {
+  drupal_install_schema('system_settings');
+}
+
+/**
+ * Implementation of hook_uninstall().
+ */
+function system_settings_uninstall() {
+  drupal_uninstall_schema('system_settings');
+}

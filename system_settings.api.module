@@ -1,0 +1,103 @@
+<?php
+// $Id$
+
+/**
+ * @file
+ *   Provide example implementations and documentation 
+ *   for system_settings api capabilities.
+ */
+
+//
+$setting = array(
+  'name' => $name,
+  'value' => $value,
+  'description' => $description,
+  'always_load' => $always_load,
+  'modules' => array(
+    'views' => array(
+      'requires' => TRUE,
+      'required by' => TRUE,
+    ),
+    'content' => array(
+      'requires' => TRUE,
+      'required by' => TRUE,
+      'callback' => 'content_update_setting', // Not a real function (yours should be).
+    ),
+  ),
+  'entities' => array(
+    array(
+      'entity' => 'node',
+      'type' => 'type',
+      'identifier' => 'story',
+      'requires' => TRUE,
+      'required by' => TRUE,
+    ),
+    array(
+      'entity' => 'node',
+      'type' => 'type',
+      'identifier' => 'page',
+      'requires' => TRUE,
+      'required by' => FALSE,
+    ),
+  ),
+  'groups' => array(
+    'Ubercart' => array(
+      'Payment',
+    ),
+  ),
+);
+
+/**
+ * Implemenation of hook_system_settings().
+ */
+function hook_system_settings() {
+  $settings = array();
+  $settings['system_settings_handlers'] = array(
+    'modules' => array('views');
+    'groups' => array('system_settings');
+    'setting' => array(
+      'system_settings_log' => 'default',
+      'system_settings_settings' => 'default',
+    );
+  );
+  return $settings;
+}
+
+/**
+ * Implementation of hook_system_settings_alter().
+ */
+function hook_system_settings_alter(&$settings) {
+  if (isset($settings['system_settings']['handlers']['system_settings_log'])) {
+    $settings['system_settings']['handlers']['system_settings_log'] = 'static_files';
+  }
+}
+
+// Overriding system_settings can be done from settings.php.  This will
+// override what is in code, stored in the database, and even cached.
+// For now this is set as part of conf, eventually it should be its own
+// variable for cleanliness.
+$conf['system_settings_conf'] = array(
+  'system_settings_handlers' =>array(
+    'modules' => array('Garland'),
+    'value' => array(
+      'system_settings_log' => 'static_files',
+    ),
+  ),
+);
+
+/**
+ * Implementation of hook_system_settings_update_handler().
+ */
+function hook_system_settings_update_handler() {
+}
+
+/**
+ * Implementation of hook_system_settings_groups()
+ */
+function hook_system_settings_groups() {
+  $groups = array(
+    'views',
+    'ubercart',
+  );
+  return $groups;
+}
