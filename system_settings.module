@@ -246,14 +246,56 @@ function _system_settings_process_setting_array($setting_name, $setting_array, &
             unset($nested_relations);
             $i++;
             // TODO: fix illegal offset, this line is critical.
-            //$nested_relations[$i][$setting_relation[$relation_identifier]] = $existing_relation;
+            $nested_relations[$i][$setting_relation[$relation_identifier]] = $existing_relation;
           }
         }
         $relations[$setting_relation_type] = $nested_relations[$i];
       }
     }
-    $system_settings = array_merge_recursive($system_settings, $relations);
+    $system_settings = system_settings_array_merge_recursive_distinct($system_settings, $relations);
   }
+}
+
+/**
+ * Merges any number of arrays / parameters recursively, replacing 
+ * entries with string keys with values from latter arrays. 
+ * If the entry or the next value to be assigned is an array, then it 
+ * automagically treats both arguments as an array.
+ * Numeric entries are appended, not replaced, but only if they are 
+ * unique.
+ *
+ * This code taken from:
+ * http://www.php.net/manual/en/function.array-merge-recursive.php#96201 
+ * Modified only to conform to coding standards.
+ *
+ * Note: array_merge_recursive won't cut it because if two strings don't 
+ * match they are turned into a linear array with each mismatch. 
+ */
+function system_settings_array_merge_recursive_distinct() {
+  $arrays = func_get_args();
+  $base = array_shift($arrays);
+  if(!is_array($base)) $base = empty($base) ? array() : array($base);
+  foreach($arrays as $append) {
+    if(!is_array($append)) {
+      $append = array($append);
+    }
+    foreach($append as $key => $value) {
+      if(!array_key_exists($key, $base) and !is_numeric($key)) {
+        $base[$key] = $append[$key];
+        continue;
+      }
+      if(is_array($value) or is_array($base[$key])) {
+        $base[$key] = system_settings_array_merge_recursive_distinct($base[$key], $append[$key]);
+      }
+      elseif(is_numeric($key)) {
+        if(!in_array($value, $base)) $base[] = $value;
+      }
+      else {
+        $base[$key] = $value;
+      }
+    }
+  }
+  return $base;
 }
 
 /**
@@ -363,7 +405,6 @@ function system_settings_clean_up_system_setting_array(&$setting_array) {
           }
           elseif (!is_numeric($key) && !is_null($value)) {
             $setting_array[$relation_type][$key] = $value;
-            $setting_array[$relation_type][$key][$relation_identifier] = $value;
           }
           elseif (is_numeric($key)) {
             $setting_array[$relation_type][$relation_identifier] = $value;
@@ -514,11 +555,12 @@ function system_settings_create_default_log_description($package, $name, $config
  */
 function system_settings_system_settings() {
   $settings['system_settings_handlers'] = array(
-    'modules' => 'system_settings',
     'value' => array(
       'system_settings' => 'default',
       'system_settings_log' => 'default',
     ),
+    'modules' => 'system_settings',
+    'groups' => 'system_settings',
   );
   return $settings;
 }
