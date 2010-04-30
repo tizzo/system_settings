@@ -134,6 +134,12 @@ class SystemSettingsDefaultHandler /*implements SystemSettingsInterface*/ {
   }
 
   /**
+   *
+   */
+  public function removeSettingsByRelation($relation_type, $relation_identifiers = array()) {
+  }
+
+  /**
    * Load an individual system_setting array by name.
    */
   public function getSetting($name) {
@@ -160,21 +166,22 @@ class SystemSettingsDefaultHandler /*implements SystemSettingsInterface*/ {
    * Store a system setting.
    *  //TODO, Rework this!
    */
-  public function storeSetting($setting) {
-    // Store or update the setting and value
-    if (!db_fetch_result(db_query("SELECT name FROM {system_settings} WHERE name='%s'", $setting['name']))) {
-      $update = '';
-      $sql = "INSERT INTO {system_settings} 
-              (name, value, load_frequency) 
-              VALUES ('%s', '%s', %d)";
-      db_query($sql, $setting['name'], serialize($value), $setting['load']);
+  public function storeSetting($setting_array) {
+    die('banana');
+    $schema = drupal_get_schema('system_settings');
+    $fields = $schema['fields'];
+    $record = new stdClass;
+    foreach ($setting_array as $name => $value) {
+      if (array_key_exists($name, $fields)) {
+        $record->$name = $value;
+      }
     }
-    else {
-      $sql = "UPDATE {system_settings} 
-              SET value = %s, load_frequency = %s 
-              WHERE name = '%s'";
-      db_query($sql, serialize($setting['value']), $load_frequency, $name);
+    if (db_fetch_result(db_query("SELECT name FROM {system_settings} WHERE name='%s'", $setting['name']))) {
+      $update = 'name';
     }
+    dpm($record);
+    drupal_write_record('system_settings', $record);
+    //$this->storeRelations($setting_array);
   }
 
   /**
@@ -183,15 +190,15 @@ class SystemSettingsDefaultHandler /*implements SystemSettingsInterface*/ {
    * @param $system_setting
    *   A single system_setting array.
    */
-   // TODO: This is waaaaaaay broken!
   private function storeRelations($system_setting) {
     $relation_types = system_settings_get_relation_types();
-    foreach($relation_types as $relation_type) {
-      foreach ($system_setting as $relation_name => $relation_data) {
-        if (in_array($relation_name, array_keys($relation_types))) {
-          $sql = "SELECT name FROM {system_settings_$table}
+    foreach ($system_setting as $relation_name => $relations) {
+      if (array_key_exists($relation_name, $relation_types)) {
+        foreach ($relations as $relation) {
+          $table = 'system_settings_' . $relation_name;
+          $sql = "SELECT name FROM {$table}
                   WHERE name = '%s'
-                  AND $relation = '%s'";
+                  AND $where";
           if(db_result(db_query($sql, $system_setting['name'], $system_setting[$relation]))) {
             $update = $identifiers;
           }

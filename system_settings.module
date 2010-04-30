@@ -325,17 +325,20 @@ function system_settings_make_system_setting_array($name, $value, $relations, $d
  * Note: currently only our three relations are really supported this could probably be generalized...
  */
 function system_settings_get_relation_types($op = NULL) {
-  $types = module_invoke_all('system_settings_define_relation_types');
-  foreach ($types as $name => $value) {
-    // Ensure identifiers are always arrays.
-    if (is_string($value['identifiers'])) {
-      $types[$name]['identifiers'] = array($types[$name]['identifiers']);
+  static $relation_types = FALSE;
+  if (!$relation_types) {
+    $types = module_invoke_all('system_settings_define_relation_types');
+    foreach ($types as $name => $value) {
+      // Ensure identifiers are always arrays.
+      if (is_string($value['identifiers'])) {
+        $types[$name]['identifiers'] = array($types[$name]['identifiers']);
+      }
     }
   }
   if ($op == 'names') {
-    return array_keys($types);
+    return array_keys($relation_types);
   }
-  return $types;
+  return $relation_types;
 }
 
 /**
@@ -468,9 +471,20 @@ function system_settings_get($name, $default = NULL) {
     return $system_settings['variables'][$name];
   }
   else {
-    system_settings_get_target_handler('system_settings')->getSetting($name);
-    $system_settings['variables'][$name] = $result;
+    $setting_array = system_settings_get_target_handler('system_settings')->getSetting($name);
+    // Add this setting to the cache in case we need it again.
+    _system_settings_process_setting_array($setting_array);
+    return $setting_array;
   }
+}
+
+/**
+ * Store a system_settings setting array.
+ */
+function system_setting_set($setting_array) {
+  system_settings_clean_up_system_setting_array($setting_array);
+  $hanlder = system_settings_get_target_handler('system_settings');
+  $hanlder->storeSetting;
 }
 
 /**
@@ -489,7 +503,7 @@ function system_settings_get_details($name) {
  *   All settings related to a given module.
  */
 function system_settings_get_module_settings($module) {
-  return system_settings_get_target_handler('system_settings')->loadModuleSettings($module);
+  return system_settings_get_target_handler('system_settings')->getSettingsByRelation('modules', $module);
 }
 
 /**
@@ -500,27 +514,14 @@ function system_settings_get_group_settings($group) {
 }
 
 /**
- *
- */
-function system_settings_set_package_settings($package, $settings) {
-  system_settings_get_target_handler('system_settings')->getSettingsByRelations('groups', $group);
-  cache_clear_all('system_settings', 'cache');
-  return;
-}
-
-/**
- *
- */
-function system_settings_get_entity_settings($entity, $type, $identifier) {
-}
-
-/**
  * Delete any variables used only by this module.
  * @param $module
  *   The module for which we want to remove unused variables.
  */
 function system_settings_uninstall_module($module) {
   system_settings_get_target_handler('system_settings')->removeSettingsByRelation('modules', $module);
+  // Cleanup any leftovers
+  system_settings_get_target_handler('system_settings')->removeOrphanSettings();
 }
 
 /**
