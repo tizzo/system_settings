@@ -173,9 +173,9 @@ function system_settings_schema() {
       ),
     ),
     'unique keys' => array(
-      'group_setting' => array('name', 'settings_group'),
+      'group_setting' => array('name', 'setting_group'),
      ),
-    'primary key' => array('name', 'settings_group'),
+    'primary key' => array('name', 'setting_group'),
     'indexes' => array(
       'group_name' => array(array('name', 4)),
     ),

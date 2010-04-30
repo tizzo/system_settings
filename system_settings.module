@@ -76,6 +76,7 @@ function system_settings_init() {
   //}
   // Load any settings defined in settings.php
   $system_settings = system_settings_load_settings_php_settings($system_settings);
+  dpm($system_settings);
 }
 
 function system_settings_check_for_updates(&$system_settings) {
@@ -231,7 +232,7 @@ function _system_settings_process_setting_array($setting_name, $setting_array, &
   foreach ($setting_array as $setting_relation_type => $setting_relation_info) {
     $relations = array();
     // Only take action if we know about this relation.
-    if (in_array($setting_relation_type, array_keys($relation_types))) {
+    if (array_key_exists($setting_relation_type, $relation_types)) {
       // Get the identifiers for this relation and add them to the
       // appropriate part of the cache.
       $relation_identifiers = array_reverse($relation_types[$setting_relation_type]['identifiers']);
@@ -245,7 +246,6 @@ function _system_settings_process_setting_array($setting_name, $setting_array, &
             $existing_relation = $nested_relations[$i];
             unset($nested_relations);
             $i++;
-            // TODO: fix illegal offset, this line is critical.
             $nested_relations[$i][$setting_relation[$relation_identifier]] = $existing_relation;
           }
         }
@@ -334,6 +334,7 @@ function system_settings_get_relation_types($op = NULL) {
         $types[$name]['identifiers'] = array($types[$name]['identifiers']);
       }
     }
+    $relation_types = $types;
   }
   if ($op == 'names') {
     return array_keys($relation_types);
@@ -381,26 +382,49 @@ function system_settings_system_settings_define_relation_types() {
 }
 
 /**
- * Cleans up a system_setting array allowing relations to be defined more flexibly.
+ * Ensures that each relation is correctly specified, make corrections where possible.
  *
- * See system_settings.api.inc for examples.
+ * Essentially, this fucntioon cleans up a system_setting array allowing relations to 
+ * be defined more flexibly.  Instead of specifying a big multidimentional array for each
+ * relation, a system setting can specify as much or as little of the information as 
+ * necessary.  This is purely a Developer Experience (DX) helper function.
+ *
+ * See system_settings.api.inc for examples of the kinds of setting arrays we can
+ * expect here.
+ *
+ * @param $setting_array
+ *   (array) A system_settings setting array.
+ * @return
+ *   (NULL)
  */
 function system_settings_clean_up_system_setting_array(&$setting_array) {
   foreach ($setting_array as $relation_type => $relation_data) {
-    // Only modify the relations we know about.
     $relation_types = system_settings_get_relation_types();
+    $identifiers = $relation_types[$relation_type]['identifiers'];
+    // Only modify the relations we know about.
     if (array_key_exists($relation_type, $relation_types)) {
-      $relation_identifier = implode('][', $relation_types[$relation_type]['identifiers']);
-      // If a single item was entered, turn that item into a single relation array.
+      // Ensure we have a string to identify this relation.  If the relation identifier
+      // is an array, convert that array into an understandable string.
+      // NOTE: This is primarily for humans reading through the array, in code we actually
+      // use the data inside the array rather than relying on the keys.
+      $relation_identifier = implode('][', $identifiers);
+      // If a single item was specified as a string, turn that item into a single relation array.
       if (is_string($relation_data)) {
         unset($setting_array[$relation_type]);
         $setting_array[$relation_type][$relation_data] = array(
-          $relation_identifier => $relation_data,
+          // If the string specified an array relation, reconstruct full the relation array.
+          array_combine($identifiers, explode('][', $relation_data)),
         );
       }
+      // If an array was specified, clean up the elements.
       elseif (is_array($relation_data)) {
         foreach ($relation_data as $key => $value) {
           unset($setting_array[$relation_type][$key]);
+          // If the identifiers are specified and are a linear array,
+          // associate them with their identifiers.
+          if (is_array($value) && is_numeric(isset($value[0]))) {
+            $value = array_combine($identifiers, $value);
+          }
           if (is_string($value)) {
             $setting_array[$relation_type][$value] = array(
               $relation_identifier => $value,
@@ -409,7 +433,7 @@ function system_settings_clean_up_system_setting_array(&$setting_array) {
           elseif (!is_numeric($key) && !is_null($value)) {
             $setting_array[$relation_type][$key] = $value;
           }
-          elseif (is_numeric($key)) {
+          elseif (is_numeric($key) && !is_null($value)) {
             $setting_array[$relation_type][$relation_identifier] = $value;
           }
         }
@@ -419,7 +443,7 @@ function system_settings_clean_up_system_setting_array(&$setting_array) {
 }
 
 /**
- * Load a full system_setting array.
+ * Load a system_setting array.
  *
  * @param $name
  *   (string) The name of the system setting to retrieve the setting for.
@@ -446,16 +470,18 @@ function system_settings_set($name, $value, $relations, $description = NULL, $al
     global $system_settings;
   }
   // Load the old value in case we need to do something with it.
-  $old_value = system_settings_load_system_setting_array($name);
+  $old_setting = system_settings_load_system_setting_array($name);
+  // TODO: we should probably check the hashes table here to monitor changes...
   module_invoke_all('system_settings_pre_set', $name, $value, $relations, $description, $always_load, $system_settings = NULL);
-  if (!$system_setting = system_settings_make_system_setting_array('system_settings_pre_set', $name, $value, $relations, $description, $always_load, $system_settings = NULL)) {
+  if (!$system_setting = system_settings_make_system_setting_array($name, $value, $relations, $description, $always_load)) {
     return FALSE;
   }
+  system_settings_clean_up_system_setting_array($system_setting);
   system_settings_get_target_handler('system_settings')->storeSetting($system_setting);
   if (is_null($description)) {
     $description = system_settings_create_default_log_description();
   }
-  system_settings_get_target_handler('system_settings_log')->logSetting($system_setting);
+  system_settings_get_target_handler('system_settings_log')->logSetting($system_setting, $old_setting);
   cache_clear_all('system_settings', 'cache');
   // We need to rerun system_settings_init in case that
   // the variable set is overridden by another module.
@@ -483,8 +509,7 @@ function system_settings_get($name, $default = NULL) {
  */
 function system_setting_set($setting_array) {
   system_settings_clean_up_system_setting_array($setting_array);
-  $hanlder = system_settings_get_target_handler('system_settings');
-  $hanlder->storeSetting;
+  $hanlder = system_settings_get_target_handler('system_settings')->storeSetting($setting_array);
 }
 
 /**

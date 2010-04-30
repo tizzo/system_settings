@@ -92,11 +92,16 @@ function system_settings_system_settings_handlers() {
       'path' => $path . 'system_settings.handler.default.inc',
       'supported targets' => system_settings_system_settings_targets(),
       'class' => 'Default',
+      // TODO: This should recursively autoload necessary parents.
+      // The farthest upstream parent should be the interface.
+      // (we'll need to figure out how to find the path for it)
+      'parent' => '',
     ),
     'static_files' => array(
       'path' => $path . 'system_settings.handler.static_files.inc',
       'supported targets' => system_settings_system_settings_targets(),
       'class' => 'Default',
+      'parent' => '',
     ),
   );
   return $handlers;
@@ -108,6 +113,7 @@ function system_settings_system_settings_handlers() {
 function system_settings_system_settings_targets() {
   $targets = array(
     'system_settings',
+    'system_settings_hashes',
     'system_settings_log',
   );
   return $targets;

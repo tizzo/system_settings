@@ -21,6 +21,8 @@ function system_settings_compatibility_system_settings() {
       'value' => $value,
       'modules' => array('system'),
       'groups' => array('variables'),
+      // These are obviously not related to the article content type.
+      // This code is present to test association handling.
       'entities' => array(
         array(
           'entity' => 'node',

@@ -12,7 +12,7 @@
  */
 class SystemSettingsDefaultHandler /*implements SystemSettingsInterface*/ {
 
-  // Internal copy of the global $system_settings
+  // Internal copy of the global $system_settings for testing purposes.
   protected  $system_settings;
 
   /**
@@ -40,8 +40,9 @@ class SystemSettingsDefaultHandler /*implements SystemSettingsInterface*/ {
     $result = db_query("SELECT name, value FROM {system_settings} WHERE always_load=%d", $always_load);
     while ($setting_array = db_fetch_array($result)) {
       foreach (system_settings_get_relation_types('names') as $relation_type) {
-        $relation_data = $this->getRelationsForSettingByRelationType($relation_type, $result->name);
-        $setting_array[$relation_type] = $relation_data;
+        if ($relation_data = $this->getRelationsForSettingByRelationType($relation_type, $result->name)) {
+          $setting_array[$relation_type] = $relation_data;
+        }
       }
       _system_settings_process_setting_array($setting_array['name'], $setting_array, $system_settings) ;
     }
@@ -64,7 +65,7 @@ class SystemSettingsDefaultHandler /*implements SystemSettingsInterface*/ {
    */
   public function getRelationsForSettingByRelationType($relation_type, $name = FALSE) {
     $relation_types = system_settings_get_relation_types();
-    $fields = $this->getFieldsForRelationType($relation_types);
+    $fields = $this->getFieldsForRelationType($relation_type);
     $fields = implode(', ', array_keys($fields));
     $sql .= "SELECT $fields FROM {system_settings_$relation_type}";
     if ($name) { 
@@ -167,7 +168,6 @@ class SystemSettingsDefaultHandler /*implements SystemSettingsInterface*/ {
    *  //TODO, Rework this!
    */
   public function storeSetting($setting_array) {
-    die('banana');
     $schema = drupal_get_schema('system_settings');
     $fields = $schema['fields'];
     $record = new stdClass;
@@ -176,12 +176,12 @@ class SystemSettingsDefaultHandler /*implements SystemSettingsInterface*/ {
         $record->$name = $value;
       }
     }
-    if (db_fetch_result(db_query("SELECT name FROM {system_settings} WHERE name='%s'", $setting['name']))) {
+    $record->value = serialize($record->value);
+    if (db_result(db_query("SELECT name FROM {system_settings} WHERE name='%s'", $setting_array['name']))) {
       $update = 'name';
     }
-    dpm($record);
-    drupal_write_record('system_settings', $record);
-    //$this->storeRelations($setting_array);
+    drupal_write_record('system_settings', $record, $update);
+    $this->storeRelations($setting_array);
   }
 
   /**
@@ -191,21 +191,44 @@ class SystemSettingsDefaultHandler /*implements SystemSettingsInterface*/ {
    *   A single system_setting array.
    */
   private function storeRelations($system_setting) {
+    dpm($system_setting);
     $relation_types = system_settings_get_relation_types();
-    foreach ($system_setting as $relation_name => $relations) {
-      if (array_key_exists($relation_name, $relation_types)) {
-        foreach ($relations as $relation) {
-          $table = 'system_settings_' . $relation_name;
-          $sql = "SELECT name FROM {$table}
-                  WHERE name = '%s'
-                  AND $where";
-          if(db_result(db_query($sql, $system_setting['name'], $system_setting[$relation]))) {
-            $update = $identifiers;
+    return;
+    foreach ($system_setting as $relation_type_name => $relations) {
+      if (array_key_exists($relation_type_name, $relation_types)) {
+        foreach ($relations as $identifiers) {
+          $query = dbtng_select('system_settings_' . $relation_type_name, 'rtn')
+            ->fields('rtn', 'name');
+          foreach ($identifiers as $identifier_name => $identifier) {
+            $query->condition($identifier_name, $identifier);
           }
-          drupal_write_record($table, $relation_data, $update);
+          if ($query->execute()->fetchcol()) {
+            $primary_keys = $identifiers;
+          }
+          dpm($relation_data);
+          //drupal_write_record($table, $relation_data, $primary_keys);
         }
       }
     }
+        /*
+        foreach ($relations as $relation) {
+          $identifiers = $relation_types[$relation_type_name]['identifiers'];
+          $where = '';
+          foreach ($identifiers as $identifier) {
+            $where .= " AND $identifier = '" . array_shift($relation) . "'";
+          }
+          $table = 'system_settings_' . $relation_type_name;
+          $sql = "SELECT name FROM {$table}
+                  WHERE name = '%s'
+                  $where";
+          dpm($sql);
+          if(db_result(db_query($sql, $system_setting['name']))) {
+            $update = $identifiers;
+          }
+          dpm($relation_data);
+          //drupal_write_record($table, $relation_data, $update);
+        }
+        //*/
   }
 
   /**
