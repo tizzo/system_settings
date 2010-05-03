@@ -3,4 +3,6 @@ name = System Settings Compatibility
 description = Helper module to provide integration support for exiting Drupal versions.
 dependencies[] = system_settings
 package = System Settings
-core = 6.x
+core = 7.x
+version = 7.x-0.1-dev
+files[] = system_settings_compatibility.module

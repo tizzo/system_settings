@@ -1,5 +1,10 @@
 ; $Id$
 name = System Settings
-description = Provide a new system settings API for Drupal..
+description = Provide a new system settings API for Drupal.
 package = System Settings
-core = 6.x
+version = 7.x-0.1-dev
+core = 7.x
+files[] = system_settings.module
+files[] = system_settings.install
+files[] = system_settings.handlers.inc
+files[] = handlers/system_settings.handlers.default.inc
