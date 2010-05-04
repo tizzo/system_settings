@@ -411,10 +411,8 @@ function system_settings_clean_up_system_setting_array(&$setting_array) {
       // If a single item was specified as a string, turn that item into a single relation array.
       if (is_string($relation_data)) {
         unset($setting_array[$relation_type]);
-        $setting_array[$relation_type][$relation_data] = array(
-          // If the string specified an array relation, reconstruct full the relation array.
-          array_combine($identifiers, explode('][', $relation_data)),
-        );
+        // If the string specified an array relation, reconstruct full the relation array.
+        $setting_array[$relation_type][$relation_data] = array_combine($identifiers, explode('][', $relation_data));
       }
       // If an array was specified, clean up the elements.
       elseif (is_array($relation_data)) {
