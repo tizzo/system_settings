@@ -7,9 +7,10 @@
  */
 
 /**
- * Provides the default handler for storing system_settings.
- * TODO: Implement the settings inteface once the API is almost finished.
+ * Provides the default handler for storing system_settings in a 
+ * relational database.
  */
+ // TODO: Implement the settings inteface once the API is almost finished.
 class SystemSettingsDefaultHandler /*implements SystemSettingsInterface*/ {
 
   // Internal copy of the global $system_settings for testing purposes.
@@ -144,10 +145,10 @@ class SystemSettingsDefaultHandler /*implements SystemSettingsInterface*/ {
    * Load an individual system_setting array by name.
    */
   public function getSetting($name) {
-    $setting = db_fetch_result(db_query("SELECT name, value, always_load FROM {system_settings} WHERE name = '%s'", $name));
+    $setting = db_fetch_array(db_query("SELECT name, value, always_load FROM {system_settings} WHERE name = '%s'", array(':name' => $name)));
     $setting['value'] = unserialize($setting['value']);
-    $entities = $this->getSettingEntities($name);
-    $setting = array_merge($setting, $entities);
+    $relations = $this->getSettingRelations($name);
+    $setting = array_merge($setting, $relations);
     return $setting;
   }
 
@@ -190,45 +191,31 @@ class SystemSettingsDefaultHandler /*implements SystemSettingsInterface*/ {
    * @param $system_setting
    *   A single system_setting array.
    */
-  private function storeRelations($system_setting) {
-    dpm($system_setting);
+  private function storeRelations($setting_array) {
     $relation_types = system_settings_get_relation_types();
-    return;
-    foreach ($system_setting as $relation_type_name => $relations) {
+    foreach ($setting_array as $relation_type_name => $relations) {
       if (array_key_exists($relation_type_name, $relation_types)) {
-        foreach ($relations as $identifiers) {
-          $query = dbtng_select('system_settings_' . $relation_type_name, 'rtn')
-            ->fields('rtn', 'name');
-          foreach ($identifiers as $identifier_name => $identifier) {
-            $query->condition($identifier_name, $identifier);
+        $table = "system_settings_$relation_type_name";
+        $schema = drupal_get_schema($table);
+        $fields = array_keys($schema['fields']);
+        foreach ($relations as $relation) {
+          $query = dbtng_select($table, 'rtn')
+            ->fields('rtn', $fields);
+          $identifiers = array();
+          foreach ($relation as $identifier_name => $identifier) {
+            if (in_array($identifier_name, $relation_types[$relation_type_name]['identifiers'])) {
+              $query->condition($identifier_name, $identifier);
+              $identifiers[] = $identifier_name;
+            }
           }
           if ($query->execute()->fetchcol()) {
             $primary_keys = $identifiers;
           }
-          dpm($relation_data);
-          //drupal_write_record($table, $relation_data, $primary_keys);
+          $relation['name'] = $setting_array['name'];
+          drupal_write_record($table, $relation, $primary_keys);
         }
       }
     }
-        /*
-        foreach ($relations as $relation) {
-          $identifiers = $relation_types[$relation_type_name]['identifiers'];
-          $where = '';
-          foreach ($identifiers as $identifier) {
-            $where .= " AND $identifier = '" . array_shift($relation) . "'";
-          }
-          $table = 'system_settings_' . $relation_type_name;
-          $sql = "SELECT name FROM {$table}
-                  WHERE name = '%s'
-                  $where";
-          dpm($sql);
-          if(db_result(db_query($sql, $system_setting['name']))) {
-            $update = $identifiers;
-          }
-          dpm($relation_data);
-          //drupal_write_record($table, $relation_data, $update);
-        }
-        //*/
   }
 
   /**
