@@ -122,7 +122,9 @@ function system_settings_load_settings_php_settings(&$system_settings = NULL) {
   // Temporary measure to store system_settings_conf until conf is used for system_settings
   // or a core patch is crafted to add this to the allowed globals in settings.php.
   global $conf;
-  $system_settings_conf = $conf['system_settings_conf'];
+  if (isset($conf['system_settings_conf'])) {
+    $system_settings_conf = $conf['system_settings_conf'];
+  }
   if (is_array($system_settings_conf)) {
     foreach ($system_settings_conf as $name => $item) {
       // Allow settings to be set by array key rather than explicitly in a settings array.
@@ -423,9 +425,9 @@ function system_settings_system_settings_define_relation_types() {
 function system_settings_clean_up_system_setting_array(&$setting_array) {
   foreach ($setting_array as $relation_type => $relation_data) {
     $relation_types = system_settings_get_relation_types();
-    $identifiers = $relation_types[$relation_type]['identifiers'];
     // Only modify the relations we know about.
     if (array_key_exists($relation_type, $relation_types)) {
+      $identifiers = $relation_types[$relation_type]['identifiers'];
       // Ensure we have a string to identify this relation.  If the relation identifier
       // is an array, convert that array into an understandable string.
       // NOTE: This is primarily for humans reading through the array, in code we actually

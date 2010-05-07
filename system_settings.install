@@ -188,25 +188,21 @@ function system_settings_schema() {
         'type' => 'varchar',
         'length' => 128,
         'not null' => TRUE,
-        'default' => '',
       ),
       'entity' => array(
         'type' => 'text',
         'length' => 128,
         'not null' => TRUE,
-        'default' => '',
       ),
       'entity_type' => array(
         'type' => 'text',
         'length' => 128,
         'not null' => TRUE,
-        'default' => '',
       ),
       'entity_identifier' => array(
         'type' => 'text',
         'length' => 128,
         'not null' => TRUE,
-        'default' => '',
       ),
       'requires' => array(
         'type' => 'int',
@@ -233,16 +229,3 @@ function system_settings_schema() {
   return $schema;
 }
 
-/**
- * Implementation of hook_install().
- */
-function system_settings_install() {
-  drupal_install_schema('system_settings');
-}
-
-/**
- * Implementation of hook_uninstall().
- */
-function system_settings_uninstall() {
-  drupal_uninstall_schema('system_settings');
-}

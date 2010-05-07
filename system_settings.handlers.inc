@@ -113,7 +113,6 @@ function system_settings_system_settings_handlers() {
 function system_settings_system_settings_targets() {
   $targets = array(
     'system_settings',
-    'system_settings_hashes',
     'system_settings_log',
   );
   return $targets;
