@@ -59,10 +59,10 @@ function system_settings_init() {
     $handler = system_settings_get_target_handler('system_settings');
     // Load default settings defined in modules.
     system_settings_get_default_settings($system_settings);
-    // Allow modules to provide default settings by group.
+    // Allow modules to provide default settings by relation.
     system_settings_get_default_relation_settings($system_settings);
     // Check for changes to settings defined in code.
-    system_settings_check_for_updates($system_settings);
+    //system_settings_check_for_updates($system_settings);
     // Get settings from the setting store.
     $handler->getAllSettings($system_settings);
     // Allow modules to alter settings.
@@ -223,6 +223,8 @@ function system_settings_run_system_settings_alter_by_relation(&$system_settings
  * @return (void)
  */
 function _system_settings_process_setting_array($setting_name, $setting_array, &$system_settings = NULL) {
+  // TODO: add support for lazy loading (default to lazy)
+  // TODO: add support for default modules (where they're laoded before getting to this code probably)
   if (is_null($system_settings)) {
     global $system_settings;
   }
@@ -254,6 +256,7 @@ function _system_settings_process_setting_array($setting_name, $setting_array, &
         $relations[$setting_relation_type] = $nested_relations[$i];
       }
     }
+    // This allows deep overrides
     $system_settings = system_settings_array_merge_recursive_distinct($system_settings, $relations);
   }
 }
@@ -266,12 +269,10 @@ function _system_settings_process_setting_array($setting_name, $setting_array, &
  * Numeric entries are appended, not replaced, but only if they are 
  * unique.
  *
- * This code taken from:
- * http://www.php.net/manual/en/function.array-merge-recursive.php#96201 
- * Modified only to conform to coding standards.
- *
  * Note: array_merge_recursive won't cut it because if two strings don't 
  * match they are turned into a linear array with each mismatch. 
+ *
+ * Thanks to Mark Roduner for contributing this function.
  */
 function system_settings_array_merge_recursive_distinct() {
   $arrays = func_get_args();
@@ -375,6 +376,10 @@ function system_settings_system_settings_define_relation_types() {
     'modules' => array(
       'identifiers' => 'module',
       'module' => 'system_settings',
+      // Whether your module would like to be notified when
+      // a setting changes.  If so, you must implement
+      // hook_system_settings_notify_relation_of_change().
+      'notify' => TRUE,
     ),
     'groups' => array(
       'identifiers' => 'setting_group',
@@ -400,7 +405,6 @@ function system_settings_system_settings_define_relation_types() {
  *   (NULL)
  */
 function system_settings_clean_up_system_setting_array(&$setting_array) {
-  // TODO: add support for lazy loading (default to lazy)
   foreach ($setting_array as $relation_type => $relation_data) {
     $relation_types = system_settings_get_relation_types();
     $identifiers = $relation_types[$relation_type]['identifiers'];
@@ -426,14 +430,21 @@ function system_settings_clean_up_system_setting_array(&$setting_array) {
           if (is_array($value)) {
             $value = array_combine($identifiers, $value);
           }
+          // If this relation was specified as a string,
+          // turn that item into an array with that value
+          // for what must be the sole identifier.
           if (is_string($value)) {
             $setting_array[$relation_type][$value] = array(
               $relation_identifier => $value,
             );
           }
+          // If this is an associative array and the value is set, 
+          // assume it was already properly populated.
           elseif (!is_numeric($key) && !is_null($value)) {
             $setting_array[$relation_type][$key] = $value;
           }
+          // If this item has a valid array of identifiers but was specified
+          // in a linear array, give it a human readable key.
           elseif (is_numeric($key) && !is_null($value) && is_array($value)) {
             $setting_array[$relation_type][$relation_identifier] = $value;
           }
@@ -515,30 +526,16 @@ function system_settings_set_multi($system_settings = NULL, $description = NULL,
  */
 function system_settings_get($name, $default = NULL) {
   global $system_settings;
-  if (isset($system_settings['variables'][$name])) {
-    return $system_settings['variables'][$name];
+  if (isset($system_settings['settings'][$name])) {
+    return $system_settings['settings'][$name];
   }
   else {
     $setting_array = system_settings_get_target_handler('system_settings')->getSetting($name);
     // Add this setting to the cache in case we need it again.
-    _system_settings_process_setting_array($setting_array);
+    // TODO: Fix this.
+    //_system_settings_process_setting_array($setting_array, $system_settings);
     return $setting_array;
   }
-}
-
-/**
- * Store a system_settings setting array.
- */
-function system_setting_set($setting_array) {
-  system_settings_clean_up_system_setting_array($setting_array);
-  $hanlder = system_settings_get_target_handler('system_settings')->storeSetting($setting_array);
-}
-
-/**
- * Get a full system_settings array for a specific setting.
- */
-function system_settings_get_details($name) {
-  return system_settings_get_target_handler('system_settings')->getDetails($name);
 }
 
 /**
@@ -554,10 +551,15 @@ function system_settings_get_module_settings($module) {
 }
 
 /**
+ * Loads all settings related to a group.
  *
+ * @param (string) $group
+ *   The name of the group to load all settings for.
+ * @return (array)
+ *   All settings related to a given group.
  */
-function system_settings_get_group_settings($group) {
-  return system_settings_get_target_handler('system_settings')->getSettingsByRelation('groups', $group);
+function system_settings_get_group_settings($group, $lazy_load = FALSE) {
+  return system_settings_get_target_handler('system_settings')->getSettingsByRelation('groups', $group, $lazy_load);
 }
 
 /**
