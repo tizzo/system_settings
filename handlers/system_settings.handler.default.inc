@@ -38,7 +38,7 @@ class SystemSettingsDefaultHandler /*implements SystemSettingsInterface*/ {
    *   An updated system_settings array.
    */
   public function getAllSettings(&$system_settings, $always_load = TRUE) {
-    $results = dbtng_query("SELECT name, value FROM {system_settings} WHERE always_load=:always_load", array(':always_load' => $always_load))->fetchAll();
+    $results = db_query("SELECT name, value FROM {system_settings} WHERE always_load=:always_load", array(':always_load' => $always_load))->fetchAll();
     foreach ($results as $result) {
       $setting_array['name'] = $result->name;
       $setting_array['value'] = unserialize($result->value);
@@ -75,7 +75,7 @@ class SystemSettingsDefaultHandler /*implements SystemSettingsInterface*/ {
     // Unset the name field, loading it
     // in the relation array would be redundant.
     unset($fields['name']);
-    $query = dbtng_select('system_settings_' . $relation_type_name, 'ssrtn')
+    $query = db_select('system_settings_' . $relation_type_name, 'ssrtn')
       ->fields('ssrtn', $fields);
     if ($name) { 
       $query->condition('name', $name);
@@ -104,7 +104,7 @@ class SystemSettingsDefaultHandler /*implements SystemSettingsInterface*/ {
     if (!$cached_relations[$relation_type_name]) {
       $relations[$relation] = array();
       $fields = $this->getFieldsForRelationType($relation_type_name);
-      $query = dbtng_select('system_settings_' . $relation_type_name, 'ssrtn')
+      $query = db_select('system_settings_' . $relation_type_name, 'ssrtn')
         ->fields('ssrtn', $fields);
       foreach ($fields as $field) {
         $query->groupBy('ssrtn.' . $field);
@@ -143,7 +143,7 @@ class SystemSettingsDefaultHandler /*implements SystemSettingsInterface*/ {
       return $cached_settings[$relation_type_name][$relation_identifier];
     }
     else {
-      $query = dbtng_select('system_settings', 'ss')
+      $query = db_select('system_settings', 'ss')
         ->fields('ss', array('name', 'value'))
         ->join('system_settings_' . $relation_type_name, 'ssrtn', 'ss.name = ssrtn.name');
       foreach ($relation as $relation_identifier_name => $relation_identifier_value) {
@@ -180,7 +180,7 @@ class SystemSettingsDefaultHandler /*implements SystemSettingsInterface*/ {
    * Load an individual system_setting array by name.
    */
   public function getSetting($name) {
-    $setting = dbtng_query("SELECT name, value, always_load FROM {system_settings} WHERE name = :name", array(':name' => $name))->fetchCol;
+    $setting = db_query("SELECT name, value, always_load FROM {system_settings} WHERE name = :name", array(':name' => $name))->fetchCol;
     $setting['value'] = unserialize($setting->value);
     $relations = $this->getSettingRelations($name);
     $setting = array_merge($setting, $relations);
@@ -195,7 +195,7 @@ class SystemSettingsDefaultHandler /*implements SystemSettingsInterface*/ {
     $relation_types = system_settings_get_relation_types();
     foreach ($relation_types as $relation_type_name => $identifiers) {
       $identifiers = $identifiers['identifiers'];
-      $results = dbtng_select('system_settings_' . $relation_type_name, 'rtn')
+      $results = db_select('system_settings_' . $relation_type_name, 'rtn')
         ->fields('rtn', $identifiers)
         ->execute();
       while ($result = $results->fetchcol()) {
@@ -221,7 +221,7 @@ class SystemSettingsDefaultHandler /*implements SystemSettingsInterface*/ {
     }
     $record->value = serialize($record->value);
     $sql = "SELECT name FROM {system_settings} WHERE name=:name";
-    if (dbtng_query($sql, array(':name' => $setting_array['name']))->fetchCol()) {
+    if (db_query($sql, array(':name' => $setting_array['name']))->fetchCol()) {
       $update = 'name';
     }
     drupal_write_record('system_settings', $record, $update);
@@ -242,7 +242,7 @@ class SystemSettingsDefaultHandler /*implements SystemSettingsInterface*/ {
         $schema = drupal_get_schema($table);
         $fields = array_keys($schema['fields']);
         foreach ($relations as $relation) {
-          $query = dbtng_select($table, 'rtn')
+          $query = db_select($table, 'rtn')
             ->fields('rtn', $fields);
           $identifiers = array();
           foreach ($relation as $identifier_name => $identifier) {
