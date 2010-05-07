@@ -45,7 +45,7 @@ function system_settings_compatibility_system_settings() {
  * patch to Drupal core for use system_settings 
  * to power variable_set.
  */
-function system_settings_compatibility_system_settings_pre_set($name, &$value, &$config, $system_settings) {
+function system_settings_compatibility_system_settings_pre_set(&$setting_array, $description, $system_settings) {
   if (!isset($config['modules'])) {
     $calling_module = system_settings_compatibility_detect_calling_module();
     $config['modules'] = array(

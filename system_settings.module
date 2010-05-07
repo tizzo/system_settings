@@ -59,10 +59,10 @@ function system_settings_init() {
     $handler = system_settings_get_target_handler('system_settings');
     // Load default settings defined in modules.
     system_settings_get_default_settings($system_settings);
-    // Allow modules to provide default settings by group.
+    // Allow modules to provide default settings by relation.
     system_settings_get_default_relation_settings($system_settings);
     // Check for changes to settings defined in code.
-    system_settings_check_for_updates($system_settings);
+    //system_settings_check_for_updates($system_settings);
     // Get settings from the setting store.
     $handler->getAllSettings($system_settings);
     // Allow modules to alter settings.
@@ -76,18 +76,36 @@ function system_settings_init() {
   //}
   // Load any settings defined in settings.php
   $system_settings = system_settings_load_settings_php_settings($system_settings);
-  dpm($system_settings);
 }
 
+/**
+ * Check for updates made to settings defined in code.
+ */
 function system_settings_check_for_updates(&$system_settings) {
   foreach($system_settings as $system_setting) {
     // TODO:
-    // Create hash of old setting
-    // Create hash of new setting
-    // Compare
-    // Call any callbacks specified for each changed setting
+    // Create hash of old setting.
+    // Create hash of new setting.
+    // Compare.
+    // Call any callbacks specified for the changed setting.
   }
 }
+
+/**
+ * Calculate a base-64 encoded, URL-safe sha-256 hash.
+ * Note: This function is a backport of the function available in Drupal 7.
+ *
+ * @param $data
+ *   $data String to be hashed.
+ * @return
+ *   A base-64 encoded sha-256 hash, with + replaced with -, / with _ and any = padding characters removed.
+ */
+function system_settings_drupal_hash_base64($data) {
+  $hash = base64_encode(hash('sha256', $data, TRUE));
+  // Modify the hash so it's safe to use in URLs.
+  return strtr($hash, array('+' => '-', '/' => '_', '=' => ''));
+}
+
 
 /**
  * Load settings specified in the settings.php file.
@@ -130,9 +148,9 @@ function system_settings_get_relations() {
   $code_relations = array();
   // TODO: Get code relations
   foreach (system_settings_get_relation_types('names') as $relation_type) {
-    $saved_relations = system_settings_get_target_handler('system_settings')->getRelationEntriesByRelationType($relation_type);
-    return array_merge($code_relations, $saved_relations); 
+    $saved_relations[] = system_settings_get_target_handler('system_settings')->getRelationEntriesByRelationType($relation_type);
   }
+  return array_merge($code_relations, $saved_relations); 
 }
 
 /**
@@ -221,6 +239,8 @@ function system_settings_run_system_settings_alter_by_relation(&$system_settings
  * @return (void)
  */
 function _system_settings_process_setting_array($setting_name, $setting_array, &$system_settings = NULL) {
+  // TODO: add support for lazy loading (default to lazy)
+  // TODO: add support for default modules (where they're laoded before getting to this code probably)
   if (is_null($system_settings)) {
     global $system_settings;
   }
@@ -252,6 +272,7 @@ function _system_settings_process_setting_array($setting_name, $setting_array, &
         $relations[$setting_relation_type] = $nested_relations[$i];
       }
     }
+    // This allows deep overrides
     $system_settings = system_settings_array_merge_recursive_distinct($system_settings, $relations);
   }
 }
@@ -264,12 +285,10 @@ function _system_settings_process_setting_array($setting_name, $setting_array, &
  * Numeric entries are appended, not replaced, but only if they are 
  * unique.
  *
- * This code taken from:
- * http://www.php.net/manual/en/function.array-merge-recursive.php#96201 
- * Modified only to conform to coding standards.
- *
  * Note: array_merge_recursive won't cut it because if two strings don't 
  * match they are turned into a linear array with each mismatch. 
+ *
+ * Thanks to Mark Roduner for contributing this function.
  */
 function system_settings_array_merge_recursive_distinct() {
   $arrays = func_get_args();
@@ -373,6 +392,10 @@ function system_settings_system_settings_define_relation_types() {
     'modules' => array(
       'identifiers' => 'module',
       'module' => 'system_settings',
+      // Whether your module would like to be notified when
+      // a setting changes.  If so, you must implement
+      // hook_system_settings_notify_relation_of_change().
+      'notify' => TRUE,
     ),
     'groups' => array(
       'identifiers' => 'setting_group',
@@ -411,10 +434,8 @@ function system_settings_clean_up_system_setting_array(&$setting_array) {
       // If a single item was specified as a string, turn that item into a single relation array.
       if (is_string($relation_data)) {
         unset($setting_array[$relation_type]);
-        $setting_array[$relation_type][$relation_data] = array(
-          // If the string specified an array relation, reconstruct full the relation array.
-          array_combine($identifiers, explode('][', $relation_data)),
-        );
+        // If the string specified an array relation, reconstruct full the relation array.
+        $setting_array[$relation_type][$relation_data] = array_combine($identifiers, explode('][', $relation_data));
       }
       // If an array was specified, clean up the elements.
       elseif (is_array($relation_data)) {
@@ -422,18 +443,25 @@ function system_settings_clean_up_system_setting_array(&$setting_array) {
           unset($setting_array[$relation_type][$key]);
           // If the identifiers are specified and are a linear array,
           // associate them with their identifiers.
-          if (is_array($value) && is_numeric(isset($value[0]))) {
+          if (is_array($value)) {
             $value = array_combine($identifiers, $value);
           }
+          // If this relation was specified as a string,
+          // turn that item into an array with that value
+          // for what must be the sole identifier.
           if (is_string($value)) {
             $setting_array[$relation_type][$value] = array(
               $relation_identifier => $value,
             );
           }
+          // If this is an associative array and the value is set, 
+          // assume it was already properly populated.
           elseif (!is_numeric($key) && !is_null($value)) {
             $setting_array[$relation_type][$key] = $value;
           }
-          elseif (is_numeric($key) && !is_null($value)) {
+          // If this item has a valid array of identifiers but was specified
+          // in a linear array, give it a human readable key.
+          elseif (is_numeric($key) && !is_null($value) && is_array($value)) {
             $setting_array[$relation_type][$relation_identifier] = $value;
           }
         }
@@ -457,35 +485,56 @@ function system_settings_load_system_setting_array($name) {
  *
  * @param $name
  *   (string) The name of the setting you wish to set.
- * @param $value
+ * @param $setting_array
  *   (mixed) The value of the setting you wish to set.
  * @param $associations
  *   (array) An array of associations for this setting
  *   keyed by 'modules', 'entities', and 'groups'.
  */
-function system_settings_set($name, $value, $relations, $description = NULL, $always_load = EVERY_PAGE, $system_settings = NULL) {
+function system_settings_set($setting_array, $description = NULL, $system_settings = NULL) {
+  if (is_null($system_settings)) {
+    global $system_settings;
+  }
+  // Load the current setting_array value.
+  $old_setting = system_settings_load_system_setting_array($setting_array['name']);
+  system_settings_clean_up_system_setting_array($setting_array);
+  // TODO: we should probably check the hashes table here to monitor changes...
+  module_invoke_all('system_settings_pre_set', $setting_array['name'], $setting_array, $description, $system_settings = NULL);
+  system_settings_get_target_handler('system_settings')->storeSetting($setting_array);
+  if (is_null($description)) {
+    $description = system_settings_create_default_log_description($setting_array);
+  }
+  // TODO: setup setting logging (and ability to turn it off?)
+  //system_settings_get_target_handler('system_settings_log')->logSetting($system_setting, $old_setting);
+  cache_clear_all('system_settings', 'cache');
+  // We need to rerun system_settings_init in case
+  // the variable set is overridden by another module.
+  system_settings_init();
+}
+
+/**
+ * Set multiple settings.
+ * @settings_arrays
+ *
+ * @param settings_arrays
+ *   An array of system_settings.   )
+ * @param system_settings
+ * @param description
+ * @param system_settings
+ * @return
+ *   (void)
+ */
+function system_settings_set_multi($system_settings = NULL, $description = NULL, $system_settings = NULL) {
   // For testing purposes we provide the ability to pass in a system_settings array rather than
   // using the global.
   if (is_null($system_settings)) {
     global $system_settings;
   }
-  // Load the old value in case we need to do something with it.
-  $old_setting = system_settings_load_system_setting_array($name);
-  // TODO: we should probably check the hashes table here to monitor changes...
-  module_invoke_all('system_settings_pre_set', $name, $value, $relations, $description, $always_load, $system_settings = NULL);
-  if (!$system_setting = system_settings_make_system_setting_array($name, $value, $relations, $description, $always_load)) {
-    return FALSE;
+  foreach ($system_settings as $setting_name => $setting_array) {
+    system_settings_set($setting_array);
   }
-  system_settings_clean_up_system_setting_array($system_setting);
-  system_settings_get_target_handler('system_settings')->storeSetting($system_setting);
-  if (is_null($description)) {
-    $description = system_settings_create_default_log_description();
-  }
-  system_settings_get_target_handler('system_settings_log')->logSetting($system_setting, $old_setting);
-  cache_clear_all('system_settings', 'cache');
-  // We need to rerun system_settings_init in case that
-  // the variable set is overridden by another module.
-  system_settings_init();
+  // TODO: figure out how to get the old_settings down here without a lot of duplicate effort
+  system_settings_get_target_handler('system_settings_log')->logSetting($system_settings, $old_settings);
 }
 
 /**
@@ -493,30 +542,16 @@ function system_settings_set($name, $value, $relations, $description = NULL, $al
  */
 function system_settings_get($name, $default = NULL) {
   global $system_settings;
-  if (isset($system_settings['variables'][$name])) {
-    return $system_settings['variables'][$name];
+  if (isset($system_settings['settings'][$name])) {
+    return $system_settings['settings'][$name];
   }
   else {
     $setting_array = system_settings_get_target_handler('system_settings')->getSetting($name);
     // Add this setting to the cache in case we need it again.
-    _system_settings_process_setting_array($setting_array);
+    // TODO: Fix this.
+    //_system_settings_process_setting_array($setting_array, $system_settings);
     return $setting_array;
   }
-}
-
-/**
- * Store a system_settings setting array.
- */
-function system_setting_set($setting_array) {
-  system_settings_clean_up_system_setting_array($setting_array);
-  $hanlder = system_settings_get_target_handler('system_settings')->storeSetting($setting_array);
-}
-
-/**
- * Get a full system_settings array for a specific setting.
- */
-function system_settings_get_details($name) {
-  return system_settings_get_target_handler('system_settings')->getDetails($name);
 }
 
 /**
@@ -532,10 +567,15 @@ function system_settings_get_module_settings($module) {
 }
 
 /**
+ * Loads all settings related to a group.
  *
+ * @param (string) $group
+ *   The name of the group to load all settings for.
+ * @return (array)
+ *   All settings related to a given group.
  */
-function system_settings_get_group_settings($group) {
-  return system_settings_get_target_handler('system_settings')->getSettingsByRelation('groups', $group);
+function system_settings_get_group_settings($group, $lazy_load = FALSE) {
+  return system_settings_get_target_handler('system_settings')->getSettingsByRelation('groups', $group, $lazy_load);
 }
 
 /**
@@ -569,8 +609,9 @@ function system_settings_remove_orphan_settings() {
  * @return
  *   string A brief description 
  */
-function system_settings_create_default_log_description($package, $name, $config) {
-  return t('The setting for @name was updated by @module', array('@name' => $name, '@module' => $config['modules']));
+function system_settings_create_default_log_description($setting_array) {
+  global $user;
+  return t('The setting for @name was updated by @user', array('@name' => $name, '@module' => l($user->name, 'user/' . $user->uid)));
 }
 
 /**
