@@ -132,9 +132,9 @@ function system_settings_get_relations() {
   $code_relations = array();
   // TODO: Get code relations
   foreach (system_settings_get_relation_types('names') as $relation_type) {
-    $saved_relations = system_settings_get_target_handler('system_settings')->getRelationEntriesByRelationType($relation_type);
-    return array_merge($code_relations, $saved_relations); 
+    $saved_relations[] = system_settings_get_target_handler('system_settings')->getRelationEntriesByRelationType($relation_type);
   }
+  return array_merge($code_relations, $saved_relations); 
 }
 
 /**

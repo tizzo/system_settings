@@ -38,11 +38,13 @@ class SystemSettingsDefaultHandler /*implements SystemSettingsInterface*/ {
    *   An updated system_settings array.
    */
   public function getAllSettings(&$system_settings, $always_load = TRUE) {
-    $result = db_query("SELECT name, value FROM {system_settings} WHERE always_load=%d", $always_load);
-    while ($setting_array = db_fetch_array($result)) {
-      foreach (system_settings_get_relation_types('names') as $relation_type) {
-        if ($relation_data = $this->getRelationsForSettingByRelationType($relation_type, $result->name)) {
-          $setting_array[$relation_type] = $relation_data;
+    $results = dbtng_query("SELECT name, value FROM {system_settings} WHERE always_load=:always_load", array(':always_load' => $always_load))->fetchAll();
+    foreach ($results as $result) {
+      $setting_array['name'] = $result->name;
+      $setting_array['value'] = unserialize($result->value);
+      foreach (system_settings_get_relation_types('names') as $relation_type_name) {
+        if ($relation_data = $this->getRelationsForSettingByRelationType($relation_type_name, $result->name)) {
+          $setting_array = system_settings_array_merge_recursive_distinct($setting_array, $relation_data);
         }
       }
       _system_settings_process_setting_array($setting_array['name'], $setting_array, $system_settings) ;
@@ -53,76 +55,109 @@ class SystemSettingsDefaultHandler /*implements SystemSettingsInterface*/ {
    * Get a list of all relations in the system setting API.
    */
   public function getAllRelations() {
+    $relations = array();
+    // TODO: Write this function.
     return $relations;
   }
 
   /**
    * Get the settings for a given relation.
    *
-   * @param $relation
+   * @param $relation_type_name
    *   The type of the relation for which to get relations.
    * @param $name (optional)
    *   The name of the setting for which to retrieve relations.
    */
-  public function getRelationsForSettingByRelationType($relation_type, $name = FALSE) {
+  public function getRelationsForSettingByRelationType($relation_type_name, $name = FALSE) {
+    $relations = array();
     $relation_types = system_settings_get_relation_types();
-    $fields = $this->getFieldsForRelationType($relation_type);
-    $fields = implode(', ', array_keys($fields));
-    $sql .= "SELECT $fields FROM {system_settings_$relation_type}";
+    $fields = $this->getFieldsForRelationType($relation_type_name);
+    // Unset the name field, loading it
+    // in the relation array would be redundant.
+    unset($fields['name']);
+    $query = dbtng_select('system_settings_' . $relation_type_name, 'ssrtn')
+      ->fields('ssrtn', $fields);
     if ($name) { 
-      " WHERE name = '%s'";
+      $query->condition('name', $name);
     }
-    $result = db_query($sql, $name);
+    $results = $query->execute()
+      ->fetchAll();
     $relation_types = system_settings_get_relation_types();
-    $identifier_fields = $relation_types[$relation_type]['identifiers'];
-    while ($item = db_fetch_array($result)) {
-      foreach ($identifier_fields as $identifier_field) {
-        $relations[$relation_type][$item[$identifier_field]] = $item;
+    $identifier_names = $relation_types[$relation_type_name]['identifiers'];
+    foreach ($results as $result) {
+      $identifiers[] = array();
+      foreach ($identifier_names as $identifier) {
+        $identifiers[] = $result->$identifier;
       }
+      $relations[$relation_type_name][implode('][', $identifiers)] = (array) $result;
     }
     return $relations;
   }
 
   /**
-   * Retrieve a linear array of all entries for a type or relation.
+   * Retrieve an array of all entries for a type or relation.
    */
-  public function getRelationEntriesByRelationType($relation_type) {
+  public function getRelationEntriesByRelationType($relation_type_name) {
     $relation_types = system_settings_get_relation_types();
+    $identifiers = $relation_types[$relation_type_name]['identifiers'];
     static $cached_relations = array();
-    if (!$cached_relations[$relation_type]) {
+    if (!$cached_relations[$relation_type_name]) {
       $relations[$relation] = array();
-      $fields = $this->getFieldsForRelationType($relation_type);
-      $fields = implode(', ', array_keys($fields));
-      $result = db_query("SELECT $fields FROM {system_settings_$relation_type} GROUP BY $fields");
-      while ($item = db_result($result)) {
-        $relations[$relation] = $item;
+      $fields = $this->getFieldsForRelationType($relation_type_name);
+      $query = dbtng_select('system_settings_' . $relation_type_name, 'ssrtn')
+        ->fields('ssrtn', $fields);
+      foreach ($fields as $field) {
+        $query->groupBy('ssrtn.' . $field);
+      }
+      $results = $query->execute()
+        ->fetchAll();
+      foreach ($results as $result) {
+        $identifier_values = array_intersect($identifiers, array_keys((array) $result));
+        $identifiers = array_combine($identifiers, $identifier_values);
+        $cached_relations[$relation_type_name][implode('][', $identifiers)] = (array) $result;
       }
     }
-    return $relations[$relation];
+    return $cached_relations[$relation_type_name];
   }
 
   /**
-   * @param (string) $group
+   * TODO: Document this more.
+   * @param (mixed) $relation
    *   The name of the group to load settings for.
    * @return (array)
    *   An array of the settings relevant to this group.
    */
-  // TODO: this is porbably broken... work on this...
-  public function getSettingsByRelation($relation, $alway_load = TRUE) {
-    if (!$active && isset($system_settings[$relation])) {
-      return $system_settings[$relation];
+  public function getSettingsByRelation($relation_type_name, $relation, $always_load = TRUE) {
+    // TODO: This is completely untested.
+    static $cached_settings = array();
+    $relation_types = system_settings_get_relation_types();
+    $identifiers = $relation_types[$relation_type_name]['identifiers'];
+    if (is_string($relation)) {
+      $relation_identifier = $relation;
+      $relation = array_combine($identifiers, explode('][', $identifiers));
     }
     else {
-      $sql = "SELECT ss.name, ss.value
-              FROM {system_settings} as ss
-              JOIN {system_settings_$relation} AS ssr ON ss.name = ssr.name
-              WHERE ssr.group = %s AND 'always_load' = %d";
-      $result = db_query($sql, $relation, $always_load);
-      $settings = array();
-      while ($setting = db_fetch_object($result)) {
-        $settings[$setting->name] = $setting->value;
+      $relation_identifier = implode('][', $identifiers);
+    }
+    if (!$always_load && isset($cached_settings[$relation_type_name][$relation_identifier])) {
+      return $cached_settings[$relation_type_name][$relation_identifier];
+    }
+    else {
+      $query = dbtng_select('system_settings', 'ss')
+        ->fields('ss', array('name', 'value'))
+        ->join('system_settings_' . $relation_type_name, 'ssrtn', 'ss.name = ssrtn.name');
+      foreach ($relation as $relation_identifier_name => $relation_identifier_value) {
+        if (in_array($relation_identifier_name, $identifiers)) {
+          $query->condition($relation_identifier_name, $relation_identifier_value);
+        }
       }
-      return $settings;
+      $results = $query->condition('ss.always_load', $always_load)
+        ->execute()
+        ->fetchAll();
+      foreach ($results as $result) {
+        $cached_settings[$relation_type_name][$relation_identifier] = (array) $result;
+      }
+      return $cached_settings[$relation_type_name][$relation_identifier];
     }
   }
 
@@ -156,12 +191,19 @@ class SystemSettingsDefaultHandler /*implements SystemSettingsInterface*/ {
    * Load all of the Relations related to a given setting.
    */
   public function getSettingRelations($name) {
-    $entities = array();
-    $relations = system_settings_get_relation_types();
-    foreach ($relations as $relation) {
-      $entities[$relation] = $this->getSettingGroups($name);
+    $relations = array();
+    $relation_types = system_settings_get_relation_types();
+    foreach ($relation_types as $relation_type_name => $identifiers) {
+      $identifiers = $identifiers['identifiers'];
+      $results = dbtng_select('system_settings_' . $relation_type_name, 'rtn')
+        ->fields('rtn', $identifiers)
+        ->execute();
+      while ($result = $results->fetchcol()) {
+        $identifier = implode('][', $identifiers);
+        $relations[$relation_type_name][$identifier] = $result;
+      }
     }
-    return $entities;
+    return $relations;
   }
 
   /**
@@ -244,7 +286,7 @@ class SystemSettingsDefaultHandler /*implements SystemSettingsInterface*/ {
   private function getFieldsForRelationType($relation_type) {
     $relation_types = system_settings_get_relation_types();
     $schema = drupal_get_schema("system_settings_$relation_type");
-    $fields = $schema['fields'];
+    $fields = array_keys($schema['fields']);
     return $fields;
   }
 
