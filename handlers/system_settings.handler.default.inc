@@ -101,8 +101,8 @@ class SystemSettingsDefaultHandler /*implements SystemSettingsInterface*/ {
     $relation_types = system_settings_get_relation_types();
     $identifiers = $relation_types[$relation_type_name]['identifiers'];
     static $cached_relations = array();
-    if (!$cached_relations[$relation_type_name]) {
-      $relations[$relation] = array();
+    if (!isset($cached_relations[$relation_type_name])) {
+      $cached_relations[$relation_type_name] = array();
       $fields = $this->getFieldsForRelationType($relation_type_name);
       $query = dbtng_select('system_settings_' . $relation_type_name, 'ssrtn')
         ->fields('ssrtn', $fields);
