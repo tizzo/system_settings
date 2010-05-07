@@ -92,6 +92,22 @@ function system_settings_check_for_updates(&$system_settings) {
 }
 
 /**
+ * Calculate a base-64 encoded, URL-safe sha-256 hash.
+ * Note: This function is a backport of the function available in Drupal 7.
+ *
+ * @param $data
+ *   $data String to be hashed.
+ * @return
+ *   A base-64 encoded sha-256 hash, with + replaced with -, / with _ and any = padding characters removed.
+ */
+function system_settings_drupal_hash_base64($data) {
+  $hash = base64_encode(hash('sha256', $data, TRUE));
+  // Modify the hash so it's safe to use in URLs.
+  return strtr($hash, array('+' => '-', '/' => '_', '=' => ''));
+}
+
+
+/**
  * Load settings specified in the settings.php file.
  *
  * @param $system_settings

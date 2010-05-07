@@ -180,8 +180,8 @@ class SystemSettingsDefaultHandler /*implements SystemSettingsInterface*/ {
    * Load an individual system_setting array by name.
    */
   public function getSetting($name) {
-    $setting = db_fetch_array(db_query("SELECT name, value, always_load FROM {system_settings} WHERE name = '%s'", array(':name' => $name)));
-    $setting['value'] = unserialize($setting['value']);
+    $setting = dbtng_query("SELECT name, value, always_load FROM {system_settings} WHERE name = :name", array(':name' => $name))->fetchCol;
+    $setting['value'] = unserialize($setting->value);
     $relations = $this->getSettingRelations($name);
     $setting = array_merge($setting, $relations);
     return $setting;
@@ -220,7 +220,8 @@ class SystemSettingsDefaultHandler /*implements SystemSettingsInterface*/ {
       }
     }
     $record->value = serialize($record->value);
-    if (db_result(db_query("SELECT name FROM {system_settings} WHERE name='%s'", $setting_array['name']))) {
+    $sql = "SELECT name FROM {system_settings} WHERE name=:name";
+    if (dbtng_query($sql, array(':name' => $setting_array['name']))->fetchCol()) {
       $update = 'name';
     }
     drupal_write_record('system_settings', $record, $update);
