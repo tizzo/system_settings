@@ -625,8 +625,12 @@ function system_settings_create_default_log_description($setting_array) {
 function system_settings_system_settings() {
   $settings['system_settings_handlers'] = array(
     'value' => array(
-      'system_settings' => 'default',
-      'system_settings_log' => 'default',
+      'system_settings' => array(
+        'handler' => 'default'
+      ),
+      'system_settings_log' => array(
+        'handler' => 'default'
+      ),
     ),
     'modules' => 'system_settings',
     'groups' => 'system_settings',
