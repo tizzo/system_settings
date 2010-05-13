@@ -20,7 +20,7 @@ define('SYSTEM_SETTINGS_LOAD_ON_REQUEST', '0');
 require_once('system_settings.handlers.inc');
 
 /**
- * Implementation of hook_init().
+ * Implements hook_init().
  *
  * Populates and caches the main array of system settings.
  */
