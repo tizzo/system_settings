@@ -1,0 +1,8 @@
+; $Id$
+name = System Settings UI
+description = Provide user interface to perform System Settings API operations.
+package = System Settings
+version = 7.x-0.1-dev
+core = 7.x
+files[] = system_settings_ui.module
+dependencies[] = system_settings
