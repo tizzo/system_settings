@@ -13,19 +13,30 @@
  // TODO: Implement the settings inteface once the API is almost finished.
 class SystemSettingsDefaultHandler /*implements SystemSettingsInterface*/ {
 
-  // Internal copy of the global $system_settings for testing purposes.
-  protected  $system_settings;
+  private $db = '';
+  private $db_target = '';
+  private $db_key = '';
 
   /**
    * Configure this object using a config object.
    *
-   * @param $config (mixed)
-   *   An object or array with keys for the object.
+   * @param $config (array)
+   *   An array with keys for the object properties.
    */
-  public function configure($config) {
-    foreach ($config as $property => $value) {
-      $this->$property = $value;
+  public function configure(array $config) {
+    if (isset($config['db_target'])) {
+      $this->db_target = $config['db_target'];
     }
+    else {
+      $this->db_target = 'default';
+    }
+    if (isset($config['db_key'])) {
+      $this->db_key = $config['db_key'];
+    }
+    else {
+      $this->db_key = 'default';
+    }
+    $this->db = Database::getConnection($config['db_target'], $config['db_key']);
   }
 
   /**
@@ -38,7 +49,7 @@ class SystemSettingsDefaultHandler /*implements SystemSettingsInterface*/ {
    *   An updated system_settings array.
    */
   public function getAllSettings(&$system_settings, $always_load = TRUE) {
-    $results = dbtng_query("SELECT name, value FROM {system_settings} WHERE always_load=:always_load", array(':always_load' => $always_load))->fetchAll();
+    $results = $this->db->query("SELECT name, value FROM {system_settings} WHERE always_load=:always_load", array(':always_load' => $always_load))->fetchAll();
     foreach ($results as $result) {
       $setting_array['name'] = $result->name;
       $setting_array['value'] = unserialize($result->value);
@@ -75,7 +86,7 @@ class SystemSettingsDefaultHandler /*implements SystemSettingsInterface*/ {
     // Unset the name field, loading it
     // in the relation array would be redundant.
     unset($fields['name']);
-    $query = dbtng_select('system_settings_' . $relation_type_name, 'ssrtn')
+    $query = $this->db->select('system_settings_' . $relation_type_name, 'ssrtn', array('target' => $this->db))
       ->fields('ssrtn', $fields);
     if ($name) { 
       $query->condition('name', $name);
@@ -85,7 +96,7 @@ class SystemSettingsDefaultHandler /*implements SystemSettingsInterface*/ {
     $relation_types = system_settings_get_relation_types();
     $identifier_names = $relation_types[$relation_type_name]['identifiers'];
     foreach ($results as $result) {
-      $identifiers[] = array();
+      $identifiers = array();
       foreach ($identifier_names as $identifier) {
         $identifiers[] = $result->$identifier;
       }
@@ -104,7 +115,7 @@ class SystemSettingsDefaultHandler /*implements SystemSettingsInterface*/ {
     if (!isset($cached_relations[$relation_type_name])) {
       $cached_relations[$relation_type_name] = array();
       $fields = $this->getFieldsForRelationType($relation_type_name);
-      $query = dbtng_select('system_settings_' . $relation_type_name, 'ssrtn')
+      $query = $this->db->select('system_settings_' . $relation_type_name, 'ssrtn', array('target' => $this->db))
         ->fields('ssrtn', $fields);
       foreach ($fields as $field) {
         $query->groupBy('ssrtn.' . $field);
@@ -143,7 +154,7 @@ class SystemSettingsDefaultHandler /*implements SystemSettingsInterface*/ {
       return $cached_settings[$relation_type_name][$relation_identifier];
     }
     else {
-      $query = dbtng_select('system_settings', 'ss')
+      $query = $this->db->select('system_settings', 'ss', array('target' => $this->db))
         ->fields('ss', array('name', 'value'))
         ->join('system_settings_' . $relation_type_name, 'ssrtn', 'ss.name = ssrtn.name');
       foreach ($relation as $relation_identifier_name => $relation_identifier_value) {
@@ -180,8 +191,8 @@ class SystemSettingsDefaultHandler /*implements SystemSettingsInterface*/ {
    * Load an individual system_setting array by name.
    */
   public function getSetting($name) {
-    $setting = dbtng_query("SELECT name, value, always_load FROM {system_settings} WHERE name = :name", array(':name' => $name))->fetchCol;
-    $setting['value'] = unserialize($setting->value);
+    $setting = $this->db->query("SELECT name, value, always_load FROM {system_settings} WHERE name = :name", array(':name' => $name), array('target' => $this->db))->fetchAssoc();
+    $setting['value'] = unserialize($setting['value']);
     $relations = $this->getSettingRelations($name);
     $setting = array_merge($setting, $relations);
     return $setting;
@@ -195,7 +206,7 @@ class SystemSettingsDefaultHandler /*implements SystemSettingsInterface*/ {
     $relation_types = system_settings_get_relation_types();
     foreach ($relation_types as $relation_type_name => $identifiers) {
       $identifiers = $identifiers['identifiers'];
-      $results = dbtng_select('system_settings_' . $relation_type_name, 'rtn')
+      $results = $this->db->select('system_settings_' . $relation_type_name, 'rtn', array('target' => $this->db))
         ->fields('rtn', $identifiers)
         ->execute();
       while ($result = $results->fetchcol()) {
@@ -208,23 +219,29 @@ class SystemSettingsDefaultHandler /*implements SystemSettingsInterface*/ {
 
   /**
    * Store a system setting.
-   *  //TODO, Rework this!
    */
   public function storeSetting($setting_array) {
     $schema = drupal_get_schema('system_settings');
     $fields = $schema['fields'];
-    $record = new stdClass;
+    $setting = array();
     foreach ($setting_array as $name => $value) {
       if (array_key_exists($name, $fields)) {
-        $record->$name = $value;
+        $setting[$name] = $value;
       }
     }
-    $record->value = serialize($record->value);
+    $setting['value'] = serialize($setting['value']);
     $sql = "SELECT name FROM {system_settings} WHERE name=:name";
-    if (dbtng_query($sql, array(':name' => $setting_array['name']))->fetchCol()) {
-      $update = 'name';
+    if (!$this->db->query($sql, array(':name' => $setting_array['name']), array('target' => $this->db))->fetchCol()) {
+      $this->db->insert('system_settings')
+        ->fields($setting)
+        ->execute();
     }
-    drupal_write_record('system_settings', $record, $update);
+    else {
+      $this->db->update('system_settings')
+        ->fields($setting)
+        ->condition('name', $setting_array['name'])
+        ->execute();
+    }
     $this->storeRelations($setting_array);
   }
 
@@ -242,7 +259,7 @@ class SystemSettingsDefaultHandler /*implements SystemSettingsInterface*/ {
         $schema = drupal_get_schema($table);
         $fields = array_keys($schema['fields']);
         foreach ($relations as $relation) {
-          $query = dbtng_select($table, 'rtn')
+          $query = $this->db->select($table, 'rtn', array('target' => $this->db))
             ->fields('rtn', $fields);
           $identifiers = array();
           foreach ($relation as $identifier_name => $identifier) {
@@ -251,11 +268,25 @@ class SystemSettingsDefaultHandler /*implements SystemSettingsInterface*/ {
               $identifiers[] = $identifier_name;
             }
           }
+          // If there is already a record for this relation, update it.
           if ($query->execute()->fetchcol()) {
-            $primary_keys = $identifiers;
+            $query = $this->db->update($table)
+              ->fields($relation);
+            // Add each unique identifier as a condition of the update.
+            foreach ($identifiers as $identifier_name => $identifier_value) {
+              $query->condition($identifier_name, $identifier_value);
+            }
+            // Add the name of the setting as a condition of the update.
+            $query->condition('name', $setting_array['name'])
+              ->execute();
           }
-          $relation['name'] = $setting_array['name'];
-          drupal_write_record($table, $relation, $primary_keys);
+          else {
+            // If there is not already a record, create one.
+            $relation['name'] = $setting_array['name'];
+            $this->db->insert($table)
+              ->fields($relation)
+              ->execute();
+          }
         }
       }
     }
@@ -278,7 +309,9 @@ class SystemSettingsDefaultHandler /*implements SystemSettingsInterface*/ {
     $data->old_value = serialize($old_value);
     $data->new_value = serialize($new_value);
     $data->description = $description;
-    drupal_write_record('system_settings_log', $data);
+    //drupal_write_record('system_settings_log', $data);
+    // Should be something like:
+    //$this->db->insert('system_settings_log', $data);
   }
 
   /**

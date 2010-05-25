@@ -19,19 +19,12 @@
  *   The appropriate system_settings handler object.
  */
 function system_settings_get_target_handler($target) {
-  global $system_settings;
   static $handlers = array();
   if (!isset($handlers[$target])) {
     $map = system_settings_handler_map();
-    $handler = system_settings_target_handler_factory($map[$target], $system_settings);
+    $handlers[$target] = system_settings_target_handler_factory($map[$target]);
   }
-  else {
-    // If we're using a cached handler make sure its system
-    // settings are up to date.
-    $conf->system_settings = $system_settings;
-    $handler->configure($conf);
-  }
-  return $handler;
+  return $handlers[$target];
 }
 
 /**
@@ -41,13 +34,15 @@ function system_settings_get_target_handler($target) {
  *   An array with keys 'handler', 'path', and 'class'
  *   of the handler, path to, and name of the class.
  */
-function system_settings_target_handler_factory($handler_data, $system_settings) {
+function system_settings_target_handler_factory($handler_data) {
   $path = drupal_get_path('module', 'system_settings') . '/handlers/system_settings.handler.interface.inc';
   require_once($handler_data['path']);
   $handler = 'SystemSettings' . $handler_data['class'] . 'Handler';
   $handler = new $handler;
-  $conf = new stdClass;
-  $conf->system_settings = $system_settings;
+  $conf = array();
+  if (isset($handler_data['conf'])) {
+    $conf = $handler_data['conf'];
+  }
   $handler->configure($conf);
   return $handler;
 }
@@ -148,13 +143,16 @@ function system_settings_handler_map() {
     $targets = system_settings_get_targets();
     $handler_map = array();
     foreach ($targets as $target) {
-      $target_handler = $handlers_settings[$target];
+      $target_handler = $handlers_settings[$target]['handler'];
       if (isset($handlers[$target_handler]) && in_array($target, $handlers[$target_handler]['supported targets'])) {
         $handler_map[$target] = array(
-          'handler' => $handlers_settings[$target],
+          'handler' => $target_handler,
           'path' => $handlers[$target_handler]['path'],
           'class' => $handlers[$target_handler]['class'],
         );
+        if (isset($handlers_settings[$target]['conf'])) {
+          $handler_map[$target]['conf'] = $handlers_settings[$target]['conf'];
+        }
       }
     }
   }

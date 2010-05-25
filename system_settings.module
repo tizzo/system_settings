@@ -487,13 +487,34 @@ function system_settings_load_system_setting_array($name) {
  *
  * @param $name
  *   (string) The name of the setting you wish to set.
- * @param $setting_array
+ * @param $value
  *   (mixed) The value of the setting you wish to set.
  * @param $associations
  *   (array) An array of associations for this setting
  *   keyed by 'modules', 'entities', and 'groups'.
  */
-function system_settings_set($setting_array, $description = NULL, $system_settings = NULL) {
+function system_settings_set($name, $value, $modules, $description = NULL, $relations = NULL) {
+  $setting_array = array(
+    'name' => $name,
+    'value' => $value,
+    'modules' => $modules,
+  );
+  if (is_array($relations)) {
+    $setting_array = system_settings_array_merge_recursive_distinct($relations, $setting_array);
+  }
+  system_settings_load_system_setting_array($setting_array, $description);
+}
+
+/**
+ * Sets a system setting.
+ *
+ * @param $setting_array
+ *   (array) The fully formed setting_array you wish to set.
+ * @param $associations
+ *   (array) An array of associations for this setting
+ *   keyed by 'modules', 'entities', and 'groups'.
+ */
+function system_settings_store_settings_array($setting_array, $description = NULL, $system_settings = NULL) {
   if (is_null($system_settings)) {
     global $system_settings;
   }
@@ -523,17 +544,22 @@ function system_settings_set($setting_array, $description = NULL, $system_settin
  * @param system_settings
  * @param description
  * @param system_settings
+ * @param common_relations
  * @return
  *   (void)
  */
-function system_settings_set_multi($system_settings = NULL, $description = NULL, $system_settings = NULL) {
+function system_settings_set_multiple($system_settings = NULL, $description = NULL, $common_relations = NULL, $system_settings = NULL) {
   // For testing purposes we provide the ability to pass in a system_settings array rather than
   // using the global.
   if (is_null($system_settings)) {
     global $system_settings;
   }
   foreach ($system_settings as $setting_name => $setting_array) {
-    system_settings_set($setting_array);
+    // If specified, allow common relations to be associated with all settings currently being set.
+    if (is_array($common_relations)) {
+      $setting_array = system_settings_array_merge_recursive_distinct($setting_array, $common_relations);
+    }
+    system_settings_store_settings_array($setting_array);
   }
   // TODO: figure out how to get the old_settings down here without a lot of duplicate effort
   system_settings_get_target_handler('system_settings_log')->logSetting($system_settings, $old_settings);
@@ -552,7 +578,7 @@ function system_settings_get($name, $default = NULL) {
     // Add this setting to the cache in case we need it again.
     // TODO: Fix this.
     //_system_settings_process_setting_array($setting_array, $system_settings);
-    return $setting_array;
+    return $setting_array['value'];
   }
 }
 
@@ -625,8 +651,12 @@ function system_settings_create_default_log_description($setting_array) {
 function system_settings_system_settings() {
   $settings['system_settings_handlers'] = array(
     'value' => array(
-      'system_settings' => 'default',
-      'system_settings_log' => 'default',
+      'system_settings' => array(
+        'handler' => 'default'
+      ),
+      'system_settings_log' => array(
+        'handler' => 'default'
+      ),
     ),
     'modules' => 'system_settings',
     'groups' => 'system_settings',

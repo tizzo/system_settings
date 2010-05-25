@@ -1,0 +1,145 @@
+<?php
+
+/**
+ * @file
+ *   Provides a UI for the system_settings API functionality.
+ */
+
+/**
+ * Implements hook_menu().
+ */
+function system_settings_ui_menu() {
+  $items['admin/config/system-settings'] = array(
+    'title' => 'System Settings',
+    'description' => 'Configure System Settings.',
+    'position' => 'right',
+    'weight' => -10,
+    'page callback' => 'system_admin_menu_block_page',
+    'access arguments' => array('access administration pages'),
+    'file' => 'system.admin.inc',
+  );
+  $items['admin/config/system-settings/backends'] = array(
+    'title' => 'System Settings Backends',
+    'description' => 'Initialize and manage other System Settings backends.',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('system_settings_api_initialize_db_form'),
+    'weight' => -10,
+    'access arguments' => array('administer system_settings backends'),
+  );
+  return $items;
+}
+
+/**
+ * Implements hook_perm().
+ */
+function hook_permission() {
+  $perm =  array(
+    'administer system_settings backends'
+  );
+  return $perm;
+}
+
+/**
+ * Implements hook_theme().
+ */
+function system_settings_ui_theme() {
+  $path = drupal_get_path('theme', 'system_settings_ui') . '/theme';
+  return array(
+    'system_settings_ui_database_info' => array(
+      'template' => 'settings-php-info',
+      'path' => $path,
+    ),
+  );
+}
+
+/**
+ * Provides a form allowing users to initialize a sqlite database for
+ * their system_settings and to advice them on adding this to settings.php.
+ */
+function system_settings_api_initialize_db_form() {
+  $form['system_settings_sqlite_db'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Databse Name'),
+    '#default_value' => system_settings_get('system_settings_ui_sqlite_db'),
+    '#description' => t('The path at which you would like to initialize a SQLite database separate from the primary Drupal database to store system_settings.'),
+  );
+  $form['submit'] = array(
+    '#type' => 'submit',
+    '#value' => 'Save',
+  );
+  $form['migration'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Migration'),
+    '#collapsible' => TRUE,
+    '#collapsed' => TRUE,
+  );
+  $form['migration']['migrate'] = array(
+    '#type' => 'submit',
+    '#value' => 'Migrate Content From Variables Table',
+    '#submit' => 'system_settings_ui_migrate_variables_table',
+  );
+  return $form;
+}
+
+/**
+ *
+ */
+function system_settings_api_initialize_db_form_validate($form, &$form_state) {
+  // Verify that this is a valid path.
+  // Verify that we are capable of writing to this path.
+}
+
+/**
+ *
+ */
+function system_settings_api_initialize_db_form_submit($form, &$form_state) {
+  //system_settings_set('system_settings_sqlite_db', $form_state['values']['system_settings_sqlite_db'], 'system');
+  $file = $form_state['values']['system_settings_sqlite_db'];
+  // Create database information.
+  $key = 'system_settings';
+  $target = 'default';
+  $db_info = array(
+    'driver' => 'sqlite',
+    'file' => $file,
+  );
+  // Get the system_settings schema.
+  $schema = drupal_get_schema_unprocessed('system_settings');
+  _drupal_schema_initialize('system_settings', $schema);
+  // Create the database
+  $database = new SQLiteDatabase($file, 0666, $error);
+  // Modify the database info so that the db layer knows 
+  // what to do with our new database.
+  Database::addConnectionInfo($key, $target, $db_info);
+  // Load our new database information.
+  Database::parseConnectionInfo();
+  // Connect to the database.
+  $db = Database::getConnection($target, $key);
+  // Install the schema.
+  // TODO: load the schema from relations defined by other modules
+  foreach ($schema as $name => $table) {
+    $db->schema()->createTable($name, $table);
+  }
+  // TODO: migrate anything already in system_settings? 
+  // Redirect to a page that displays the results.
+    drupal_set_message(t('Please add the following to your settings.php file: !settings', array('!settings' => $settings_text)));
+}
+
+/**
+ * Migrates settings stored in the variables table to system_settings.
+ */
+function system_settings_ui_migrate_variables_table() {
+  global $conf;
+  global $user;
+  $settings = array();
+  foreach ($conf as $name => $value) {
+    $settings[] = array(
+      'name' => $name,
+      'value' => $value,
+      'modules' => 'system',
+      'groups' => 'variables',
+    );
+  }
+  $description = t('User !username imported all of the legacy variables from the variables table into the system_settings api.', array('!username' => l($user->name, 'user/' . $user->uid)));
+  system_settings_set_multiple($settings, $description);
+}
+
