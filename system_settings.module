@@ -133,8 +133,9 @@ function system_settings_load_settings_php_settings(&$system_settings = NULL) {
         $item['name'] = $name;
       }
       $item['groups'] = 'settings_php';
-      system_settings_clean_up_system_setting_array($item);
-      _system_settings_process_setting_array($name, $item, $system_settings);
+      // Can't do this here if we want to bootstrap with this function.
+      //system_settings_clean_up_system_setting_array($item);
+      //_system_settings_process_setting_array($name, $item, $system_settings);
     }
   }
   return $system_settings;
