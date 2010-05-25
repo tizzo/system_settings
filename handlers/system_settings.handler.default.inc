@@ -24,17 +24,11 @@ class SystemSettingsDefaultHandler /*implements SystemSettingsInterface*/ {
    *   An array with keys for the object properties.
    */
   public function configure(array $config) {
-    if (isset($config['db_target'])) {
-      $this->db_target = $config['db_target'];
+    if (!isset($config['db_target'])) {
+      $config['db_target'] = 'default';
     }
-    else {
-      $this->db_target = 'default';
-    }
-    if (isset($config['db_key'])) {
-      $this->db_key = $config['db_key'];
-    }
-    else {
-      $this->db_key = 'default';
+    if (!isset($config['db_key'])) {
+      $config['db_key'] = 'default';
     }
     $this->db = Database::getConnection($config['db_target'], $config['db_key']);
   }

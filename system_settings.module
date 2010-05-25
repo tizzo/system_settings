@@ -20,7 +20,7 @@ define('SYSTEM_SETTINGS_LOAD_ON_REQUEST', '0');
 require_once('system_settings.handlers.inc');
 
 /**
- * Implementation of hook_init().
+ * Implements hook_init().
  *
  * Populates and caches the main array of system settings.
  */
@@ -133,8 +133,9 @@ function system_settings_load_settings_php_settings(&$system_settings = NULL) {
         $item['name'] = $name;
       }
       $item['groups'] = 'settings_php';
-      system_settings_clean_up_system_setting_array($item);
-      _system_settings_process_setting_array($name, $item, $system_settings);
+      // Can't do this here if we want to bootstrap with this function.
+      //system_settings_clean_up_system_setting_array($item);
+      //_system_settings_process_setting_array($name, $item, $system_settings);
     }
   }
   return $system_settings;
@@ -514,7 +515,7 @@ function system_settings_set($name, $value, $modules, $description = NULL, $rela
  *   (array) An array of associations for this setting
  *   keyed by 'modules', 'entities', and 'groups'.
  */
-function system_settings_store_settings_array($setting_array, $description = NULL, $system_settings = NULL) {
+function system_settings_store_settings_array($setting_array, $system_settings = NULL) {
   if (is_null($system_settings)) {
     global $system_settings;
   }
@@ -522,6 +523,8 @@ function system_settings_store_settings_array($setting_array, $description = NUL
   $old_setting = system_settings_load_system_setting_array($setting_array['name']);
   system_settings_clean_up_system_setting_array($setting_array);
   // TODO: we should probably check the hashes table here to monitor changes...
+  // todo: fix description handling
+  $description = '';
   module_invoke_all('system_settings_pre_set', $setting_array['name'], $setting_array, $description, $system_settings = NULL);
   system_settings_get_target_handler('system_settings')->storeSetting($setting_array);
   if (is_null($description)) {
@@ -548,13 +551,17 @@ function system_settings_store_settings_array($setting_array, $description = NUL
  * @return
  *   (void)
  */
-function system_settings_set_multiple($system_settings = NULL, $description = NULL, $common_relations = NULL, $system_settings = NULL) {
+function system_settings_set_multiple($setting_arrays = NULL, $description = NULL, $common_relations = NULL, $system_settings = NULL) {
   // For testing purposes we provide the ability to pass in a system_settings array rather than
   // using the global.
   if (is_null($system_settings)) {
     global $system_settings;
   }
-  foreach ($system_settings as $setting_name => $setting_array) {
+  foreach ($setting_arrays as $setting_name => $setting_array) {
+    if (is_string($setting_name) && !isset($setting_array['name'])) {
+      $setting_array['name'] = $setting_name;
+    }
+    system_settings_clean_up_system_setting_array($setting_array);
     // If specified, allow common relations to be associated with all settings currently being set.
     if (is_array($common_relations)) {
       $setting_array = system_settings_array_merge_recursive_distinct($setting_array, $common_relations);
@@ -562,7 +569,7 @@ function system_settings_set_multiple($system_settings = NULL, $description = NU
     system_settings_store_settings_array($setting_array);
   }
   // TODO: figure out how to get the old_settings down here without a lot of duplicate effort
-  system_settings_get_target_handler('system_settings_log')->logSetting($system_settings, $old_settings);
+  //system_settings_get_target_handler('system_settings_log')->logSetting($system_settings, $old_settings);
 }
 
 /**

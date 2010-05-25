@@ -143,15 +143,17 @@ function system_settings_handler_map() {
     $targets = system_settings_get_targets();
     $handler_map = array();
     foreach ($targets as $target) {
-      $target_handler = $handlers_settings[$target]['handler'];
-      if (isset($handlers[$target_handler]) && in_array($target, $handlers[$target_handler]['supported targets'])) {
-        $handler_map[$target] = array(
-          'handler' => $target_handler,
-          'path' => $handlers[$target_handler]['path'],
-          'class' => $handlers[$target_handler]['class'],
-        );
-        if (isset($handlers_settings[$target]['conf'])) {
-          $handler_map[$target]['conf'] = $handlers_settings[$target]['conf'];
+      if (isset($handlers_settings[$target]['handler'])) {
+        $target_handler = $handlers_settings[$target]['handler'];
+        if (isset($handlers[$target_handler]) && in_array($target, $handlers[$target_handler]['supported targets'])) {
+          $handler_map[$target] = array(
+            'handler' => $target_handler,
+            'path' => $handlers[$target_handler]['path'],
+            'class' => $handlers[$target_handler]['class'],
+          );
+          if (isset($handlers_settings[$target]['conf'])) {
+            $handler_map[$target]['conf'] = $handlers_settings[$target]['conf'];
+          }
         }
       }
     }
