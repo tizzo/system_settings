@@ -114,22 +114,6 @@ function system_settings_system_settings_targets() {
 }
 
 /**
- * Get all of the settings defined in code that are available
- * before we can connect to the database. 
- */
-function system_settings_pre_init_settings_get($name) {
-  global $system_settings;
-  $system_settings = system_settings_get_default_settings($system_settings);
-  system_settings_load_settings_php_settings($system_settings);
-  if (isset($system_settings['settings'][$name])) {
-    return $system_settings['settings'][$name];
-  }
-  else {
-    return FALSE;
-  }
-}
-
-/**
  * Maps system_settings targets to system_settings handlers.
  *
  * @return

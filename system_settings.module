@@ -79,6 +79,22 @@ function system_settings_init() {
 }
 
 /**
+ * Get all of the settings defined in code that are available
+ * before we can connect to the database. 
+ */
+function system_settings_pre_init_settings_get($name) {
+  global $system_settings;
+  $system_settings = system_settings_get_default_settings($system_settings);
+  system_settings_load_settings_php_settings($system_settings);
+  if (isset($system_settings['settings'][$name])) {
+    return $system_settings['settings'][$name];
+  }
+  else {
+    return FALSE;
+  }
+}
+
+/**
  * Check for updates made to settings defined in code.
  */
 function system_settings_check_for_updates(&$system_settings) {
