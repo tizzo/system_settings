@@ -1,8 +1,6 @@
 <?php
 // $Id$
 
-// TODO: Stuff should get written to watchdog!
-
 /**
  * @file
  * Provide a system settings API used to store settings
@@ -34,21 +32,23 @@ function system_settings_init() {
   // TODO: re-add caching
   // This should work but is completely untested.
   // Load the cached main settings cache.
-  //if ($cached = cache_get('system_settings' . $relation_type_name, 'cache')) {
-    //$system_settings['settings'] = $cached->data;
-  //}
-  //else {
-    //$rebuild_settings_cache = TRUE;
-  //}
+  /*
+  if ($cached = cache_get('system_settings' . $relation_type_name, 'cache')) {
+    $system_settings['settings'] = $cached->data;
+  }
+  else {
+    $rebuild_settings_cache = TRUE;
+  }
   // Load the cache for each relationship
-  //foreach (system_settings_get_relations('names') as $relation_type_name) {
-    //if ($cached = cache_get('system_settings' . $relation_type_name, 'cache')) {
-      //$system_settings[$relation_type_name] = $cached->data;
-    //}
-    //else {
-      //$rebuild_settings_cache = TRUE;
-    //}
-  //}
+  foreach (system_settings_get_relations('names') as $relation_type_name) {
+    if ($cached = cache_get('system_settings' . $relation_type_name, 'cache')) {
+      $system_settings[$relation_type_name] = $cached->data;
+    }
+    else {
+      $rebuild_settings_cache = TRUE;
+    }
+  }
+  */
   // If we failed to load any part of the settings cache,
   // rebuild the cache completely.
  // if ($rebuild_settings_cache) {
