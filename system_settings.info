@@ -1,4 +1,3 @@
-; $Id$
 name = System Settings
 description = Provide a new system settings API for Drupal.
 package = System Settings

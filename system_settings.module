@@ -1,5 +1,4 @@
 <?php
-// $Id$
 
 /**
  * @file
@@ -84,6 +83,7 @@ function system_settings_init() {
  */
 function system_settings_pre_init_settings_get($name) {
   global $system_settings;
+  // We can't do this here.  We'll need to run this at an early stage in the bootstrap.
   $system_settings = system_settings_get_default_settings($system_settings);
   system_settings_load_settings_php_settings($system_settings);
   if (isset($system_settings['settings'][$name])) {
@@ -106,22 +106,6 @@ function system_settings_check_for_updates(&$system_settings) {
     // Call any callbacks specified for the changed setting.
   }
 }
-
-/**
- * Calculate a base-64 encoded, URL-safe sha-256 hash.
- * Note: This function is a backport of the function available in Drupal 7.
- *
- * @param $data
- *   $data String to be hashed.
- * @return
- *   A base-64 encoded sha-256 hash, with + replaced with -, / with _ and any = padding characters removed.
- */
-function system_settings_drupal_hash_base64($data) {
-  $hash = base64_encode(hash('sha256', $data, TRUE));
-  // Modify the hash so it's safe to use in URLs.
-  return strtr($hash, array('+' => '-', '/' => '_', '=' => ''));
-}
-
 
 /**
  * Load settings specified in the settings.php file.

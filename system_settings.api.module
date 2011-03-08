@@ -1,5 +1,4 @@
 <?php
-// $Id$
 
 /**
  * @file
@@ -74,8 +73,7 @@ function hook_system_settings_alter(&$settings) {
 
 // Overriding system_settings can be done from settings.php.  This will
 // override what is in code, stored in the database, and even cached.
-// For now this is set as part of conf, eventually it should be its own
-// variable for cleanliness.
+// For now this is set as part of conf, eventually it probably replaces it.
 $conf['system_settings_conf'] = array(
   'system_settings_handlers' =>array(
     'modules' => array('Garland'),

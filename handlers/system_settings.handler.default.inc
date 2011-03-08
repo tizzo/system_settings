@@ -1,5 +1,4 @@
 <?php
-// $Id$
 
 /**
  * @file
@@ -18,7 +17,7 @@ class SystemSettingsDefaultHandler /*implements SystemSettingsInterface*/ {
   private $db_key = '';
 
   /**
-   * Configure this object using a config object.
+   * Configure this object using an array.
    *
    * @param $config (array)
    *   An array with keys for the object properties.
@@ -61,7 +60,7 @@ class SystemSettingsDefaultHandler /*implements SystemSettingsInterface*/ {
    */
   public function getAllRelations() {
     $relations = array();
-    // TODO: Write this function.
+    // TODO: Write this method.
     return $relations;
   }
 
@@ -304,8 +303,6 @@ class SystemSettingsDefaultHandler /*implements SystemSettingsInterface*/ {
     $data->new_value = serialize($new_value);
     $data->description = $description;
     //drupal_write_record('system_settings_log', $data);
-    // Should be something like:
-    //$this->db->insert('system_settings_log', $data);
   }
 
   /**
